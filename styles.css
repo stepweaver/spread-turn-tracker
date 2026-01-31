@@ -322,6 +322,7 @@ header h1:focus {
 }
 
 .setting-group input[type="text"],
+.setting-group input[type="password"],
 .setting-group input[type="number"],
 .setting-group input[type="date"] {
     padding: 0.75rem;
@@ -331,6 +332,8 @@ header h1:focus {
     background-color: var(--bg-color);
     color: var(--text-color);
     font-family: inherit;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .setting-group input:focus {

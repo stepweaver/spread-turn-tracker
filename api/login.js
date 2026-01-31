@@ -33,6 +33,13 @@ module.exports = async (req, res) => {
     }
 
     try {
+        // Debug: Log environment variable status (don't log actual values)
+        console.log('Environment check:', {
+            hasSupabaseUrl: !!process.env.SUPABASE_URL,
+            hasSupabaseKey: !!process.env.SUPABASE_SERVICE_KEY,
+            hasJwtSecret: !!process.env.JWT_SECRET,
+            hasAppUsers: !!process.env.APP_USERS
+        });
         const { username, password } = req.body;
 
         if (!username || !password) {
@@ -64,6 +71,11 @@ module.exports = async (req, res) => {
         }
 
         // Get or create user in Supabase
+        if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+            console.error('Missing Supabase credentials');
+            return res.status(500).json({ error: 'Server configuration error: Supabase credentials not set' });
+        }
+        
         const supabase = createClient(
             process.env.SUPABASE_URL,
             process.env.SUPABASE_SERVICE_KEY
@@ -136,6 +148,13 @@ module.exports = async (req, res) => {
 
     } catch (error) {
         console.error('Login error:', error);
-        return res.status(500).json({ error: 'Internal server error' });
+        console.error('Error stack:', error.stack);
+        // Return more detailed error in development
+        const isDev = process.env.VERCEL_ENV === 'development' || !process.env.VERCEL_ENV;
+        return res.status(500).json({ 
+            error: isDev ? error.message : 'Internal server error',
+            details: isDev ? error.stack : undefined,
+            type: error.name || 'Error'
+        });
     }
 };

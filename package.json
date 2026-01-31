@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "description": "Orthodontic expander turn tracker with Supabase backend",
   "scripts": {
-    "dev": "vercel dev"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",

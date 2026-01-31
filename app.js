@@ -37,7 +37,8 @@ async function apiCall(endpoint, options = {}) {
     }
     
     try {
-        const response = await fetch(`${API_BASE}${endpoint}`, {
+        const url = `${API_BASE}${endpoint}`;
+        const response = await fetch(url, {
             ...options,
             headers
         });
@@ -49,7 +50,15 @@ async function apiCall(endpoint, options = {}) {
             throw new Error('Session expired. Please login again.');
         }
         
-        const data = await response.json();
+        // Check if response is JSON
+        const contentType = response.headers.get('content-type');
+        let data;
+        if (contentType && contentType.includes('application/json')) {
+            data = await response.json();
+        } else {
+            const text = await response.text();
+            throw new Error(`Server error: ${text || response.statusText}`);
+        }
         
         if (!response.ok) {
             throw new Error(data.error || 'API request failed');
@@ -58,6 +67,15 @@ async function apiCall(endpoint, options = {}) {
         return data;
     } catch (error) {
         console.error('API call error:', error);
+        // If it's a network error, provide helpful message
+        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError') || error.name === 'TypeError') {
+            const isFileProtocol = window.location.protocol === 'file:';
+            if (isFileProtocol) {
+                throw new Error('Cannot connect to server. You are opening the file directly. Please run "vercel dev" or test on the deployed URL.');
+            } else {
+                throw new Error('Cannot connect to server. Make sure the API is deployed or you are running "vercel dev".');
+            }
+        }
         throw error;
     }
 }
@@ -899,6 +917,9 @@ document.addEventListener('keypress', (e) => {
 
 // Initialize app
 (async function init() {
+    // Attach login button listener immediately (before checking auth)
+    attachEventListeners();
+    
     // Check if user is logged in
     const token = getToken();
     const user = getUser();
