@@ -162,32 +162,140 @@ header h1:focus {
     font-size: 0.875rem;
     color: var(--text-secondary);
     margin-bottom: var(--spacing);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.progress-percentage {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--accent-cyan);
+    text-shadow: 0 0 10px rgba(0, 217, 255, 0.8), 0 0 20px rgba(0, 217, 255, 0.6);
+    background: linear-gradient(90deg, #00d9ff, #ff00ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: percentage-glow 2s ease-in-out infinite;
+}
+
+@keyframes percentage-glow {
+    0%, 100% {
+        filter: brightness(1);
+    }
+    50% {
+        filter: brightness(1.5);
+    }
 }
 
 .progress-bar {
     width: 100%;
-    height: 8px;
-    background-color: var(--border-color);
-    border-radius: 4px;
+    height: 12px;
+    background: 
+        repeating-linear-gradient(
+            90deg,
+            rgba(255, 0, 128, 0.15) 0%,
+            rgba(255, 0, 128, 0.15) 2%,
+            transparent 2%,
+            transparent 4%
+        ),
+        linear-gradient(90deg, 
+            rgba(255, 0, 128, 0.2) 0%, 
+            rgba(179, 0, 255, 0.2) 25%,
+            rgba(0, 217, 255, 0.2) 50%,
+            rgba(179, 0, 255, 0.2) 75%,
+            rgba(255, 0, 128, 0.2) 100%);
+    border-radius: 6px;
     overflow: hidden;
+    position: relative;
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.3), 0 0 10px rgba(255, 0, 128, 0.2);
+    border: 1px solid rgba(255, 0, 128, 0.3);
 }
 
 .progress-fill {
     height: 100%;
-    background: var(--primary-color);
-    transition: width 0.3s ease;
-    border-radius: 4px;
-    box-shadow: var(--glow-pink), inset 0 0 10px rgba(255, 255, 255, 0.3);
+    background: linear-gradient(90deg, 
+        #ff0080 0%, 
+        #ff00ff 20%,
+        #b300ff 40%,
+        #00d9ff 60%,
+        #b300ff 80%,
+        #ff0080 100%);
+    background-size: 200% 100%;
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 6px;
     position: relative;
-    animation: pulse-glow 2s ease-in-out infinite;
+    animation: pulse-glow 2s ease-in-out infinite, gradient-shift 3s ease infinite;
+    overflow: hidden;
+}
+
+.progress-fill::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, 
+        transparent 0%, 
+        rgba(255, 255, 255, 0.4) 50%, 
+        transparent 100%);
+    animation: shine 2s ease-in-out infinite;
+}
+
+.progress-fill::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, transparent 70%);
+    animation: rotate-glow 4s linear infinite;
 }
 
 @keyframes pulse-glow {
     0%, 100% { 
-        box-shadow: var(--glow-pink), inset 0 0 10px rgba(255, 255, 255, 0.3);
+        box-shadow: 
+            0 0 10px rgba(255, 0, 128, 0.8),
+            0 0 20px rgba(255, 0, 128, 0.6),
+            0 0 30px rgba(255, 0, 128, 0.4),
+            inset 0 0 10px rgba(255, 255, 255, 0.2);
     }
     50% { 
-        box-shadow: 0 0 15px rgba(255, 0, 128, 1), 0 0 30px rgba(255, 0, 128, 0.8), 0 0 45px rgba(255, 0, 128, 0.6), inset 0 0 15px rgba(255, 255, 255, 0.4);
+        box-shadow: 
+            0 0 20px rgba(255, 0, 128, 1),
+            0 0 40px rgba(255, 0, 128, 0.8),
+            0 0 60px rgba(255, 0, 128, 0.6),
+            0 0 80px rgba(0, 217, 255, 0.4),
+            inset 0 0 15px rgba(255, 255, 255, 0.3);
+    }
+}
+
+@keyframes gradient-shift {
+    0%, 100% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+}
+
+@keyframes shine {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(200%);
+    }
+}
+
+@keyframes rotate-glow {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
     }
 }
 

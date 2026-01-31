@@ -490,11 +490,13 @@ function render() {
     document.getElementById('bottomTotal').textContent = state.bottomTotal;
     document.getElementById('bottomRemaining').textContent = Math.max(0, state.bottomTotal - state.bottomDone);
     
-    // Update progress bars
+    // Update progress bars and percentages
     const topProgress = (state.topDone / state.topTotal) * 100;
     const bottomProgress = (state.bottomDone / state.bottomTotal) * 100;
     document.getElementById('topProgress').style.width = `${topProgress}%`;
     document.getElementById('bottomProgress').style.width = `${bottomProgress}%`;
+    document.getElementById('topPercentage').textContent = `${Math.round(topProgress)}%`;
+    document.getElementById('bottomPercentage').textContent = `${Math.round(bottomProgress)}%`;
     
     // Update status strip
     const lastLogged = state.history.length > 0 ? state.history[0].date : null;
