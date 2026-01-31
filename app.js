@@ -3,9 +3,10 @@
 const API_BASE = (() => {
     const origin = window.location.origin;
     // Safety check - should never be file:// in production
-    if (origin === 'null' || origin.startsWith('file://')) {
+    if (!origin || origin === 'null' || origin.startsWith('file://')) {
         console.error('Invalid origin detected:', origin);
         // In production, this should never happen, but provide a fallback
+        // Return empty string so the error handler can catch it
         return '';
     }
     return origin;
