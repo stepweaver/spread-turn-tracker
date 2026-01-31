@@ -1,5 +1,15 @@
 // API Configuration
-const API_BASE = window.location.origin;
+// Use current origin for API calls (works in both dev and production)
+const API_BASE = (() => {
+    const origin = window.location.origin;
+    // Safety check - should never be file:// in production
+    if (origin === 'null' || origin.startsWith('file://')) {
+        console.error('Invalid origin detected:', origin);
+        // In production, this should never happen, but provide a fallback
+        return '';
+    }
+    return origin;
+})();
 
 // Authentication
 const TOKEN_KEY = 'spreaderTracker_token';
@@ -37,7 +47,13 @@ async function apiCall(endpoint, options = {}) {
     }
     
     try {
+        // Ensure we have a valid API base
+        if (!API_BASE || API_BASE.startsWith('file://')) {
+            throw new Error('Invalid API base URL. Make sure you are accessing the app through a web server (not opening the file directly).');
+        }
+        
         const url = `${API_BASE}${endpoint}`;
+        console.log('API call to:', url); // Debug log
         const response = await fetch(url, {
             ...options,
             headers
