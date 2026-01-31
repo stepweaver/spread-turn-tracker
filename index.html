@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Track orthodontic expander turns for your child">
+    <title>Spreader Turn Tracker</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header with editable child name -->
+        <header>
+            <h1 id="childName" contenteditable="true">Child</h1>
+            <button id="settingsBtn" class="icon-btn" aria-label="Settings">⚙️</button>
+        </header>
+
+        <!-- Progress Cards -->
+        <div class="progress-section">
+            <div class="progress-card">
+                <h2>Top</h2>
+                <div class="counter">
+                    <span id="topDone">1</span> / <span id="topTotal">27</span>
+                </div>
+                <div class="remaining">
+                    <span id="topRemaining">26</span> remaining
+                </div>
+                <div class="progress-bar">
+                    <div id="topProgress" class="progress-fill"></div>
+                </div>
+            </div>
+
+            <div class="progress-card">
+                <h2>Bottom</h2>
+                <div class="counter">
+                    <span id="bottomDone">1</span> / <span id="bottomTotal">23</span>
+                </div>
+                <div class="remaining">
+                    <span id="bottomRemaining">22</span> remaining
+                </div>
+                <div class="progress-bar">
+                    <div id="bottomProgress" class="progress-fill"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Strip -->
+        <div class="status-strip">
+            <div class="status-item">
+                <span class="status-label">Last logged:</span>
+                <span id="lastLoggedDate">Never</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Next due:</span>
+                <span id="nextDueDate">-</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Status:</span>
+                <span id="statusIndicator" class="status-badge">Ready</span>
+            </div>
+        </div>
+
+        <!-- Warning Message -->
+        <div id="warningMessage" class="warning hidden"></div>
+
+        <!-- Action Buttons -->
+        <div class="actions">
+            <div id="logButtons">
+                <button id="logTurnBtn" class="btn btn-primary">Log today's turn</button>
+            </div>
+            <div class="secondary-actions">
+                <button id="undoBtn" class="btn btn-secondary">Undo last log</button>
+                <button id="resetBtn" class="btn btn-secondary">Reset</button>
+            </div>
+        </div>
+
+        <!-- Settings Panel -->
+        <div id="settingsPanel" class="settings-panel hidden">
+            <div class="settings-header">
+                <h2>Settings</h2>
+                <button id="closeSettingsBtn" class="icon-btn" aria-label="Close settings">✕</button>
+            </div>
+            <div class="settings-content">
+                <div class="setting-group">
+                    <label for="settingsChildName">Child Name</label>
+                    <input type="text" id="settingsChildName" placeholder="Child">
+                </div>
+                <div class="setting-group">
+                    <label for="settingsInstallDate">Install Date</label>
+                    <input type="date" id="settingsInstallDate">
+                </div>
+                <div class="setting-group">
+                    <label for="settingsIntervalDays">Interval (days)</label>
+                    <input type="number" id="settingsIntervalDays" min="1" value="2">
+                </div>
+                <div class="setting-group">
+                    <label for="settingsTopTotal">Top Total</label>
+                    <input type="number" id="settingsTopTotal" min="1" value="27">
+                </div>
+                <div class="setting-group">
+                    <label for="settingsBottomTotal">Bottom Total</label>
+                    <input type="number" id="settingsBottomTotal" min="1" value="23">
+                </div>
+                <div class="setting-group">
+                    <label for="settingsTopDone">Top Done</label>
+                    <input type="number" id="settingsTopDone" min="0" value="1">
+                </div>
+                <div class="setting-group">
+                    <label for="settingsBottomDone">Bottom Done</label>
+                    <input type="number" id="settingsBottomDone" min="0" value="1">
+                </div>
+                <div class="setting-group">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="settingsLogTogether" checked>
+                        <span>Log top and bottom together</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- History Section -->
+        <div class="history-section">
+            <h2>Recent History</h2>
+            <div id="historyList" class="history-list">
+                <p class="empty-state">No turns logged yet.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reset Confirmation Modal -->
+    <div id="resetModal" class="modal hidden">
+        <div class="modal-content">
+            <h2>Reset All Data?</h2>
+            <p>This will reset all counters, history, and settings to defaults. This cannot be undone.</p>
+            <div class="modal-actions">
+                <button id="confirmResetBtn" class="btn btn-danger">Reset</button>
+                <button id="cancelResetBtn" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Note Input Modal -->
+    <div id="noteModal" class="modal hidden">
+        <div class="modal-content">
+            <h2>Add Note (Optional)</h2>
+            <textarea id="noteInput" placeholder="Add a note about this turn..." rows="3"></textarea>
+            <div class="modal-actions">
+                <button id="confirmNoteBtn" class="btn btn-primary">Log Turn</button>
+                <button id="cancelNoteBtn" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
