@@ -303,6 +303,12 @@ async function logTurn(arch, note) {
         if (state.bottomDone < state.bottomTotal) {
             state.bottomDone++;
             state.lastBottomTurnDate = today;
+            
+            // If bottom just completed and we're logging together, switch to separate tracking
+            // so the UI clearly shows only top turns can be logged
+            if (state.bottomDone >= state.bottomTotal && state.logTogether && state.topDone < state.topTotal) {
+                state.logTogether = false;
+            }
         }
     }
     
