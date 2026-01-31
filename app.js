@@ -1,5 +1,124 @@
-// State Management
-const STORAGE_KEY = 'spreaderTracker:v1';
+// API Configuration
+const API_BASE = window.location.origin;
+
+// Authentication
+const TOKEN_KEY = 'spreaderTracker_token';
+const USER_KEY = 'spreaderTracker_user';
+
+function getToken() {
+    return sessionStorage.getItem(TOKEN_KEY);
+}
+
+function setToken(token, user) {
+    sessionStorage.setItem(TOKEN_KEY, token);
+    sessionStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
+function clearAuth() {
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(USER_KEY);
+}
+
+function getUser() {
+    const userStr = sessionStorage.getItem(USER_KEY);
+    return userStr ? JSON.parse(userStr) : null;
+}
+
+// API Helper Functions
+async function apiCall(endpoint, options = {}) {
+    const token = getToken();
+    const headers = {
+        'Content-Type': 'application/json',
+        ...options.headers
+    };
+    
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}${endpoint}`, {
+            ...options,
+            headers
+        });
+        
+        if (response.status === 401) {
+            // Unauthorized - clear auth and show login
+            clearAuth();
+            showLogin();
+            throw new Error('Session expired. Please login again.');
+        }
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'API request failed');
+        }
+        
+        return data;
+    } catch (error) {
+        console.error('API call error:', error);
+        throw error;
+    }
+}
+
+async function login(username, password) {
+    const data = await apiCall('/api/login', {
+        method: 'POST',
+        body: JSON.stringify({ username, password })
+    });
+    
+    setToken(data.token, data.user);
+    return data;
+}
+
+async function loadState() {
+    try {
+        const data = await apiCall('/api/data', {
+            method: 'GET'
+        });
+        
+        // Merge with defaults to ensure all fields exist
+        state = { ...defaultState, ...data };
+        
+        // Ensure history is an array
+        if (!Array.isArray(state.history)) {
+            state.history = [];
+        }
+        
+        return state;
+    } catch (error) {
+        console.error('Error loading state:', error);
+        // Return defaults on error
+        state = { ...defaultState };
+        return state;
+    }
+}
+
+async function saveState() {
+    try {
+        await apiCall('/api/data', {
+            method: 'POST',
+            body: JSON.stringify({
+                topTotal: state.topTotal,
+                bottomTotal: state.bottomTotal,
+                topDone: state.topDone,
+                bottomDone: state.bottomDone,
+                intervalDays: state.intervalDays,
+                installDate: state.installDate,
+                lastTurnDate: state.lastTurnDate,
+                lastTopTurnDate: state.lastTopTurnDate,
+                lastBottomTurnDate: state.lastBottomTurnDate,
+                childName: state.childName,
+                logTogether: state.logTogether,
+                history: state.history
+            })
+        });
+    } catch (error) {
+        console.error('Error saving state:', error);
+        alert('Failed to save data: ' + error.message);
+    }
+}
 
 // Default state
 const defaultState = {
@@ -19,38 +138,6 @@ const defaultState = {
 
 // Current state
 let state = { ...defaultState };
-
-// Load state from localStorage
-function loadState() {
-    try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-            const parsed = JSON.parse(stored);
-            // Merge with defaults to handle missing fields
-            state = { ...defaultState, ...parsed };
-            // Ensure history is an array
-            if (!Array.isArray(state.history)) {
-                state.history = [];
-            }
-        } else {
-            state = { ...defaultState };
-        }
-    } catch (error) {
-        console.error('Error loading state:', error);
-        state = { ...defaultState };
-    }
-    return state;
-}
-
-// Save state to localStorage
-function saveState() {
-    try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch (error) {
-        console.error('Error saving state:', error);
-        alert('Failed to save data. Please check browser storage settings.');
-    }
-}
 
 // Date Utility Functions
 function todayMidnight() {
@@ -160,7 +247,7 @@ function canLogTurn(arch) {
     }
 }
 
-function logTurn(arch, note) {
+async function logTurn(arch, note) {
     const today = dateToISOString(todayMidnight());
     const historyEntry = {
         timestamp: new Date().toISOString(),
@@ -198,10 +285,10 @@ function logTurn(arch, note) {
         state.history = state.history.slice(0, 50);
     }
     
-    saveState();
+    await saveState();
 }
 
-function undoLastLog() {
+async function undoLastLog() {
     if (state.history.length === 0) {
         return false;
     }
@@ -221,17 +308,18 @@ function undoLastLog() {
         let lastBothDate = null;
         
         for (const entry of state.history) {
-            const entryDate = new Date(entry.date);
             const entryTop = entry.topDoneAfter;
             const entryBottom = entry.bottomDoneAfter;
             
             // Check if this entry represents a top turn
-            if (entryTop > (lastTopDate ? state.history.find(e => e.date === lastTopDate)?.topDoneAfter || 0 : 0)) {
+            const prevTop = state.history.find(e => e.date === lastTopDate);
+            if (!lastTopDate || entryTop > (prevTop?.topDoneAfter || 0)) {
                 lastTopDate = entry.date;
             }
             
             // Check if this entry represents a bottom turn
-            if (entryBottom > (lastBottomDate ? state.history.find(e => e.date === lastBottomDate)?.bottomDoneAfter || 0 : 0)) {
+            const prevBottom = state.history.find(e => e.date === lastBottomDate);
+            if (!lastBottomDate || entryBottom > (prevBottom?.bottomDoneAfter || 0)) {
                 lastBottomDate = entry.date;
             }
             
@@ -250,14 +338,14 @@ function undoLastLog() {
         state.lastBottomTurnDate = null;
     }
     
-    saveState();
+    await saveState();
     return true;
 }
 
-function reset() {
+async function reset() {
     if (confirm('Are you sure you want to reset all data? This cannot be undone.')) {
         state = { ...defaultState };
-        saveState();
+        await saveState();
         render();
     }
 }
@@ -330,6 +418,19 @@ function getStatus(arch) {
         }
         return 'ready';
     }
+}
+
+// Login UI Functions
+function showLogin() {
+    const loginModal = document.getElementById('loginModal');
+    loginModal.classList.remove('hidden');
+    document.getElementById('loginUsername').focus();
+}
+
+function hideLogin() {
+    const loginModal = document.getElementById('loginModal');
+    loginModal.classList.add('hidden');
+    document.getElementById('loginError').classList.add('hidden');
 }
 
 // UI Rendering and Event Handlers
@@ -441,9 +542,50 @@ function render() {
 }
 
 function attachEventListeners() {
+    // Login button
+    const loginBtn = document.getElementById('loginBtn');
+    if (loginBtn && !loginBtn.dataset.listenerAttached) {
+        loginBtn.dataset.listenerAttached = 'true';
+        loginBtn.onclick = async () => {
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const errorEl = document.getElementById('loginError');
+            const loadingEl = document.getElementById('loginLoading');
+            
+            if (!username || !password) {
+                errorEl.textContent = 'Please enter username and password';
+                errorEl.classList.remove('hidden');
+                return;
+            }
+            
+            errorEl.classList.add('hidden');
+            loadingEl.classList.remove('hidden');
+            loginBtn.disabled = true;
+            
+            try {
+                await login(username, password);
+                hideLogin();
+                // Show main app content
+                const container = document.querySelector('.container');
+                if (container) {
+                    container.style.display = '';
+                }
+                await loadState();
+                render();
+            } catch (error) {
+                errorEl.textContent = error.message || 'Login failed';
+                errorEl.classList.remove('hidden');
+            } finally {
+                loadingEl.classList.add('hidden');
+                loginBtn.disabled = false;
+            }
+        };
+    }
+    
     // Log turn button(s)
     const logTurnBtn = document.getElementById('logTurnBtn');
-    if (logTurnBtn) {
+    if (logTurnBtn && !logTurnBtn.dataset.listenerAttached) {
+        logTurnBtn.dataset.listenerAttached = 'true';
         logTurnBtn.onclick = () => {
             const noteModal = document.getElementById('noteModal');
             noteModal.classList.remove('hidden');
@@ -452,22 +594,24 @@ function attachEventListeners() {
     }
     
     const logTopBtn = document.getElementById('logTopBtn');
-    if (logTopBtn) {
-        logTopBtn.onclick = () => {
+    if (logTopBtn && !logTopBtn.dataset.listenerAttached) {
+        logTopBtn.dataset.listenerAttached = 'true';
+        logTopBtn.onclick = async () => {
             const canLog = canLogTurn('top');
             if (canLog.canLog) {
-                logTurn('top', '');
+                await logTurn('top', '');
                 render();
             }
         };
     }
     
     const logBottomBtn = document.getElementById('logBottomBtn');
-    if (logBottomBtn) {
-        logBottomBtn.onclick = () => {
+    if (logBottomBtn && !logBottomBtn.dataset.listenerAttached) {
+        logBottomBtn.dataset.listenerAttached = 'true';
+        logBottomBtn.onclick = async () => {
             const canLog = canLogTurn('bottom');
             if (canLog.canLog) {
-                logTurn('bottom', '');
+                await logTurn('bottom', '');
                 render();
             }
         };
@@ -475,22 +619,24 @@ function attachEventListeners() {
     
     // Note modal buttons
     const confirmNoteBtn = document.getElementById('confirmNoteBtn');
-    if (confirmNoteBtn) {
-        confirmNoteBtn.onclick = () => {
+    if (confirmNoteBtn && !confirmNoteBtn.dataset.listenerAttached) {
+        confirmNoteBtn.dataset.listenerAttached = 'true';
+        confirmNoteBtn.onclick = async () => {
             const note = document.getElementById('noteInput').value.trim();
             const noteModal = document.getElementById('noteModal');
             noteModal.classList.add('hidden');
             
             const canLog = canLogTurn('both');
             if (canLog.canLog) {
-                logTurn('both', note);
+                await logTurn('both', note);
                 render();
             }
         };
     }
     
     const cancelNoteBtn = document.getElementById('cancelNoteBtn');
-    if (cancelNoteBtn) {
+    if (cancelNoteBtn && !cancelNoteBtn.dataset.listenerAttached) {
+        cancelNoteBtn.dataset.listenerAttached = 'true';
         cancelNoteBtn.onclick = () => {
             document.getElementById('noteModal').classList.add('hidden');
         };
@@ -498,9 +644,10 @@ function attachEventListeners() {
     
     // Undo button
     const undoBtn = document.getElementById('undoBtn');
-    if (undoBtn && !undoBtn.onclick) {
-        undoBtn.onclick = () => {
-            if (undoLastLog()) {
+    if (undoBtn && !undoBtn.dataset.listenerAttached) {
+        undoBtn.dataset.listenerAttached = 'true';
+        undoBtn.onclick = async () => {
+            if (await undoLastLog()) {
                 render();
             }
         };
@@ -508,7 +655,8 @@ function attachEventListeners() {
     
     // Reset button
     const resetBtn = document.getElementById('resetBtn');
-    if (resetBtn && !resetBtn.onclick) {
+    if (resetBtn && !resetBtn.dataset.listenerAttached) {
+        resetBtn.dataset.listenerAttached = 'true';
         resetBtn.onclick = () => {
             const resetModal = document.getElementById('resetModal');
             resetModal.classList.remove('hidden');
@@ -517,17 +665,19 @@ function attachEventListeners() {
     
     // Reset modal buttons
     const confirmResetBtn = document.getElementById('confirmResetBtn');
-    if (confirmResetBtn && !confirmResetBtn.onclick) {
-        confirmResetBtn.onclick = () => {
+    if (confirmResetBtn && !confirmResetBtn.dataset.listenerAttached) {
+        confirmResetBtn.dataset.listenerAttached = 'true';
+        confirmResetBtn.onclick = async () => {
             state = { ...defaultState };
-            saveState();
+            await saveState();
             render();
             document.getElementById('resetModal').classList.add('hidden');
         };
     }
     
     const cancelResetBtn = document.getElementById('cancelResetBtn');
-    if (cancelResetBtn && !cancelResetBtn.onclick) {
+    if (cancelResetBtn && !cancelResetBtn.dataset.listenerAttached) {
+        cancelResetBtn.dataset.listenerAttached = 'true';
         cancelResetBtn.onclick = () => {
             document.getElementById('resetModal').classList.add('hidden');
         };
@@ -535,17 +685,21 @@ function attachEventListeners() {
     
     // Settings button
     const settingsBtn = document.getElementById('settingsBtn');
-    if (settingsBtn && !settingsBtn.onclick) {
+    if (settingsBtn && !settingsBtn.dataset.listenerAttached) {
+        settingsBtn.dataset.listenerAttached = 'true';
         settingsBtn.onclick = () => {
             const panel = document.getElementById('settingsPanel');
             panel.classList.remove('hidden');
             updateSettingsForm();
+            // Setup form listeners when panel opens (only once)
+            setupSettingsForm();
         };
     }
     
     // Close settings button
     const closeSettingsBtn = document.getElementById('closeSettingsBtn');
-    if (closeSettingsBtn && !closeSettingsBtn.onclick) {
+    if (closeSettingsBtn && !closeSettingsBtn.dataset.listenerAttached) {
+        closeSettingsBtn.dataset.listenerAttached = 'true';
         closeSettingsBtn.onclick = () => {
             document.getElementById('settingsPanel').classList.add('hidden');
         };
@@ -553,120 +707,154 @@ function attachEventListeners() {
     
     // Child name editing
     const childNameEl = document.getElementById('childName');
-    if (childNameEl) {
-        childNameEl.onblur = () => {
+    if (childNameEl && !childNameEl.dataset.listenerAttached) {
+        childNameEl.dataset.listenerAttached = 'true';
+        childNameEl.onblur = async () => {
             state.childName = childNameEl.textContent.trim() || 'Child';
-            saveState();
+            await saveState();
         };
     }
     
-    // Settings form inputs
-    setupSettingsForm();
+    // Settings form inputs - only setup once, not on every render
+    // setupSettingsForm() is called separately when settings panel opens
 }
 
 function updateSettingsForm() {
-    document.getElementById('settingsChildName').value = state.childName;
-    document.getElementById('settingsInstallDate').value = state.installDate || '';
-    document.getElementById('settingsIntervalDays').value = state.intervalDays;
-    document.getElementById('settingsTopTotal').value = state.topTotal;
-    document.getElementById('settingsBottomTotal').value = state.bottomTotal;
-    document.getElementById('settingsTopDone').value = state.topDone;
-    document.getElementById('settingsBottomDone').value = state.bottomDone;
-    document.getElementById('settingsLogTogether').checked = state.logTogether;
+    // Only update if inputs don't have focus (user isn't actively typing)
+    const childNameInput = document.getElementById('settingsChildName');
+    if (childNameInput && document.activeElement !== childNameInput) {
+        childNameInput.value = state.childName;
+    }
+    
+    const installDateInput = document.getElementById('settingsInstallDate');
+    if (installDateInput && document.activeElement !== installDateInput) {
+        installDateInput.value = state.installDate || '';
+    }
+    
+    const intervalInput = document.getElementById('settingsIntervalDays');
+    if (intervalInput && document.activeElement !== intervalInput) {
+        intervalInput.value = state.intervalDays;
+    }
+    
+    const topTotalInput = document.getElementById('settingsTopTotal');
+    if (topTotalInput && document.activeElement !== topTotalInput) {
+        topTotalInput.value = state.topTotal;
+    }
+    
+    const bottomTotalInput = document.getElementById('settingsBottomTotal');
+    if (bottomTotalInput && document.activeElement !== bottomTotalInput) {
+        bottomTotalInput.value = state.bottomTotal;
+    }
+    
+    const topDoneInput = document.getElementById('settingsTopDone');
+    if (topDoneInput && document.activeElement !== topDoneInput) {
+        topDoneInput.value = state.topDone;
+    }
+    
+    const bottomDoneInput = document.getElementById('settingsBottomDone');
+    if (bottomDoneInput && document.activeElement !== bottomDoneInput) {
+        bottomDoneInput.value = state.bottomDone;
+    }
+    
+    const logTogetherInput = document.getElementById('settingsLogTogether');
+    if (logTogetherInput && document.activeElement !== logTogetherInput) {
+        logTogetherInput.checked = state.logTogether;
+    }
 }
 
 function setupSettingsForm() {
-    const form = document.querySelector('.settings-content');
-    if (!form) return;
-    
-    // Remove existing listeners by cloning
-    const newForm = form.cloneNode(true);
-    form.parentNode.replaceChild(newForm, form);
-    
-    // Child name
+    // Child name - use onblur instead of oninput to avoid issues while typing
     const childNameInput = document.getElementById('settingsChildName');
-    if (childNameInput) {
-        childNameInput.oninput = () => {
+    if (childNameInput && !childNameInput.dataset.listenerAttached) {
+        childNameInput.dataset.listenerAttached = 'true';
+        childNameInput.onblur = async () => {
             state.childName = childNameInput.value.trim() || 'Child';
-            saveState();
-            render();
+            await saveState();
+            // Don't call render() here to avoid interfering with other inputs
         };
     }
     
     // Install date
     const installDateInput = document.getElementById('settingsInstallDate');
-    if (installDateInput) {
-        installDateInput.onchange = () => {
+    if (installDateInput && !installDateInput.dataset.listenerAttached) {
+        installDateInput.dataset.listenerAttached = 'true';
+        installDateInput.onchange = async () => {
             state.installDate = installDateInput.value || null;
-            saveState();
+            await saveState();
             render();
         };
     }
     
     // Interval days
     const intervalInput = document.getElementById('settingsIntervalDays');
-    if (intervalInput) {
-        intervalInput.onchange = () => {
+    if (intervalInput && !intervalInput.dataset.listenerAttached) {
+        intervalInput.dataset.listenerAttached = 'true';
+        intervalInput.onchange = async () => {
             state.intervalDays = Math.max(1, parseInt(intervalInput.value) || 2);
-            saveState();
+            await saveState();
             render();
         };
     }
     
     // Totals
     const topTotalInput = document.getElementById('settingsTopTotal');
-    if (topTotalInput) {
-        topTotalInput.onchange = () => {
+    if (topTotalInput && !topTotalInput.dataset.listenerAttached) {
+        topTotalInput.dataset.listenerAttached = 'true';
+        topTotalInput.onchange = async () => {
             const newTotal = Math.max(1, parseInt(topTotalInput.value) || 27);
             state.topTotal = newTotal;
             if (state.topDone > newTotal) {
                 state.topDone = newTotal;
             }
-            saveState();
+            await saveState();
             render();
         };
     }
     
     const bottomTotalInput = document.getElementById('settingsBottomTotal');
-    if (bottomTotalInput) {
-        bottomTotalInput.onchange = () => {
+    if (bottomTotalInput && !bottomTotalInput.dataset.listenerAttached) {
+        bottomTotalInput.dataset.listenerAttached = 'true';
+        bottomTotalInput.onchange = async () => {
             const newTotal = Math.max(1, parseInt(bottomTotalInput.value) || 23);
             state.bottomTotal = newTotal;
             if (state.bottomDone > newTotal) {
                 state.bottomDone = newTotal;
             }
-            saveState();
+            await saveState();
             render();
         };
     }
     
     // Done counts
     const topDoneInput = document.getElementById('settingsTopDone');
-    if (topDoneInput) {
-        topDoneInput.onchange = () => {
+    if (topDoneInput && !topDoneInput.dataset.listenerAttached) {
+        topDoneInput.dataset.listenerAttached = 'true';
+        topDoneInput.onchange = async () => {
             const newDone = Math.max(0, Math.min(parseInt(topDoneInput.value) || 1, state.topTotal));
             state.topDone = newDone;
-            saveState();
+            await saveState();
             render();
         };
     }
     
     const bottomDoneInput = document.getElementById('settingsBottomDone');
-    if (bottomDoneInput) {
-        bottomDoneInput.onchange = () => {
+    if (bottomDoneInput && !bottomDoneInput.dataset.listenerAttached) {
+        bottomDoneInput.dataset.listenerAttached = 'true';
+        bottomDoneInput.onchange = async () => {
             const newDone = Math.max(0, Math.min(parseInt(bottomDoneInput.value) || 1, state.bottomTotal));
             state.bottomDone = newDone;
-            saveState();
+            await saveState();
             render();
         };
     }
     
     // Log together toggle
     const logTogetherInput = document.getElementById('settingsLogTogether');
-    if (logTogetherInput) {
-        logTogetherInput.onchange = () => {
+    if (logTogetherInput && !logTogetherInput.dataset.listenerAttached) {
+        logTogetherInput.dataset.listenerAttached = 'true';
+        logTogetherInput.onchange = async () => {
             state.logTogether = logTogetherInput.checked;
-            saveState();
+            await saveState();
             render();
         };
     }
@@ -687,8 +875,60 @@ document.addEventListener('click', (e) => {
             noteModal.classList.add('hidden');
         }
     }
+    
+    const loginModal = document.getElementById('loginModal');
+    if (loginModal && !loginModal.classList.contains('hidden')) {
+        if (e.target === loginModal) {
+            // Don't close login modal on outside click - require login
+        }
+    }
+});
+
+// Enter key on login form
+document.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        const loginModal = document.getElementById('loginModal');
+        if (!loginModal.classList.contains('hidden')) {
+            const loginBtn = document.getElementById('loginBtn');
+            if (loginBtn) {
+                loginBtn.click();
+            }
+        }
+    }
 });
 
 // Initialize app
-loadState();
-render();
+(async function init() {
+    // Check if user is logged in
+    const token = getToken();
+    const user = getUser();
+    
+    if (!token || !user) {
+        // No auth - show login and prevent access
+        showLogin();
+        // Hide main app content
+        const container = document.querySelector('.container');
+        if (container) {
+            container.style.display = 'none';
+        }
+        return;
+    }
+    
+    // Hide login, show app, load data, and render
+    hideLogin();
+    const container = document.querySelector('.container');
+    if (container) {
+        container.style.display = '';
+    }
+    try {
+        await loadState();
+        render();
+    } catch (error) {
+        console.error('Failed to load state:', error);
+        // If load fails, might be auth issue - show login
+        showLogin();
+        if (container) {
+            container.style.display = 'none';
+        }
+    }
+})();

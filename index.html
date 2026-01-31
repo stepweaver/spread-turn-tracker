@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="container">
+    <div class="container" id="mainContainer" style="display: none;">
         <!-- Header with editable child name -->
         <header>
             <h1 id="childName" contenteditable="true">Child</h1>
@@ -148,6 +148,26 @@
                 <button id="confirmNoteBtn" class="btn btn-primary">Log Turn</button>
                 <button id="cancelNoteBtn" class="btn btn-secondary">Cancel</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal hidden">
+        <div class="modal-content">
+            <h2>Login</h2>
+            <p id="loginError" class="error-message hidden"></p>
+            <div class="setting-group">
+                <label for="loginUsername">Username</label>
+                <input type="text" id="loginUsername" placeholder="Enter username" autocomplete="username">
+            </div>
+            <div class="setting-group">
+                <label for="loginPassword">Password</label>
+                <input type="password" id="loginPassword" placeholder="Enter password" autocomplete="current-password">
+            </div>
+            <div class="modal-actions">
+                <button id="loginBtn" class="btn btn-primary">Login</button>
+            </div>
+            <p class="loading-message hidden" id="loginLoading">Logging in...</p>
         </div>
     </div>
 

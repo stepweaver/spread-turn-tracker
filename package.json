@@ -1,0 +1,16 @@
+{
+  "name": "spread-turn-tracker",
+  "version": "1.0.0",
+  "description": "Orthodontic expander turn tracker with Supabase backend",
+  "scripts": {
+    "dev": "vercel dev"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "@vercel/node": "^3.0.0"
+  }
+}
