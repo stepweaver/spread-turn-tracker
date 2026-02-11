@@ -219,6 +219,9 @@ function getTurnsThisWeek(arch) {
     }).length;
 }
 
+// Install turn: orthodontist did first turn at install, so displayed count = logged turns + 1
+const INSTALL_TURN = 1;
+
 // Data Loading
 async function loadData() {
     try {
@@ -234,7 +237,7 @@ async function loadData() {
         state.turns = turns || [];
         state.treatmentNotes = treatmentNotes || [];
         
-        // Calculate counts from turns
+        // Calculate counts from turns (logged turns only; display adds INSTALL_TURN)
         state.counts.topDone = state.turns.filter(t => t.arch === 'top').length;
         state.counts.bottomDone = state.turns.filter(t => t.arch === 'bottom').length;
         
@@ -302,10 +305,11 @@ async function undoTurn(turnId) {
     await loadData();
 }
 
-// Schedule Checking
+// Schedule Checking (displayed done = logged turns + install turn)
 function canLogTurn(arch) {
     const isTop = arch === 'top';
-    const done = isTop ? state.counts.topDone : state.counts.bottomDone;
+    const logged = isTop ? state.counts.topDone : state.counts.bottomDone;
+    const done = logged + INSTALL_TURN; // include install turn
     const total = isTop ? state.settings.topTotal : state.settings.bottomTotal;
     const lastDate = isTop ? state.lastDates.top : state.lastDates.bottom;
     
@@ -345,7 +349,8 @@ function canLogTurn(arch) {
 
 function getNextDueDate(arch) {
     const isTop = arch === 'top';
-    const done = isTop ? state.counts.topDone : state.counts.bottomDone;
+    const logged = isTop ? state.counts.topDone : state.counts.bottomDone;
+    const done = logged + INSTALL_TURN;
     const total = isTop ? state.settings.topTotal : state.settings.bottomTotal;
     const lastDate = isTop ? state.lastDates.top : state.lastDates.bottom;
     
@@ -378,7 +383,7 @@ function getNextDueDate(arch) {
 
 function getStatus(arch) {
     const isTop = arch === 'top';
-    const done = isTop ? state.counts.topDone : state.counts.bottomDone;
+    const done = (isTop ? state.counts.topDone : state.counts.bottomDone) + INSTALL_TURN;
     const total = isTop ? state.settings.topTotal : state.settings.bottomTotal;
     
     if (done >= total) {
@@ -435,21 +440,24 @@ function render() {
         childNameEl.textContent = state.settings.childName;
     }
     
-    // Update progress cards
-    document.getElementById('topDone').textContent = state.counts.topDone;
+    // Update progress cards (display = logged + install turn)
+    const topDoneDisplay = state.counts.topDone + INSTALL_TURN;
+    const bottomDoneDisplay = state.counts.bottomDone + INSTALL_TURN;
+    
+    document.getElementById('topDone').textContent = topDoneDisplay;
     document.getElementById('topTotal').textContent = state.settings.topTotal;
-    document.getElementById('topRemaining').textContent = Math.max(0, state.settings.topTotal - state.counts.topDone);
+    document.getElementById('topRemaining').textContent = Math.max(0, state.settings.topTotal - topDoneDisplay);
     const topPercentage = state.settings.topTotal > 0 
-        ? Math.round((state.counts.topDone / state.settings.topTotal) * 100) 
+        ? Math.round((topDoneDisplay / state.settings.topTotal) * 100) 
         : 0;
     document.getElementById('topPercentage').textContent = `${topPercentage}%`;
     document.getElementById('topProgress').style.width = `${topPercentage}%`;
     
-    document.getElementById('bottomDone').textContent = state.counts.bottomDone;
+    document.getElementById('bottomDone').textContent = bottomDoneDisplay;
     document.getElementById('bottomTotal').textContent = state.settings.bottomTotal;
-    document.getElementById('bottomRemaining').textContent = Math.max(0, state.settings.bottomTotal - state.counts.bottomDone);
+    document.getElementById('bottomRemaining').textContent = Math.max(0, state.settings.bottomTotal - bottomDoneDisplay);
     const bottomPercentage = state.settings.bottomTotal > 0 
-        ? Math.round((state.counts.bottomDone / state.settings.bottomTotal) * 100) 
+        ? Math.round((bottomDoneDisplay / state.settings.bottomTotal) * 100) 
         : 0;
     document.getElementById('bottomPercentage').textContent = `${bottomPercentage}%`;
     document.getElementById('bottomProgress').style.width = `${bottomPercentage}%`;
