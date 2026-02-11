@@ -329,56 +329,96 @@ async function logTurn(arch, note) {
     await saveState();
 }
 
-async function undoLastLog() {
+// Helper function to recalculate last turn dates and current counts from history
+function recalculateStateFromHistory() {
     if (state.history.length === 0) {
-        return false;
-    }
-    
-    const lastEntry = state.history[0];
-    state.history.shift();
-    
-    // Restore previous state
-    if (state.history.length > 0) {
-        const prevEntry = state.history[0];
-        state.topDone = prevEntry.topDoneAfter;
-        state.bottomDone = prevEntry.bottomDoneAfter;
-        
-        // Find the most recent date for each arch
-        let lastTopDate = null;
-        let lastBottomDate = null;
-        let lastBothDate = null;
-        
-        for (const entry of state.history) {
-            const entryTop = entry.topDoneAfter;
-            const entryBottom = entry.bottomDoneAfter;
-            
-            // Check if this entry represents a top turn
-            const prevTop = state.history.find(e => e.date === lastTopDate);
-            if (!lastTopDate || entryTop > (prevTop?.topDoneAfter || 0)) {
-                lastTopDate = entry.date;
-            }
-            
-            // Check if this entry represents a bottom turn
-            const prevBottom = state.history.find(e => e.date === lastBottomDate);
-            if (!lastBottomDate || entryBottom > (prevBottom?.bottomDoneAfter || 0)) {
-                lastBottomDate = entry.date;
-            }
-            
-            lastBothDate = entry.date;
-        }
-        
-        state.lastTopTurnDate = lastTopDate;
-        state.lastBottomTurnDate = lastBottomDate;
-        state.lastTurnDate = lastBothDate;
-    } else {
         // No history left, reset to initial state
         state.topDone = 1;
         state.bottomDone = 1;
         state.lastTurnDate = null;
         state.lastTopTurnDate = null;
         state.lastBottomTurnDate = null;
+        return;
     }
     
+    // Get the most recent entry's counts
+    const mostRecent = state.history[0];
+    state.topDone = mostRecent.topDoneAfter;
+    state.bottomDone = mostRecent.bottomDoneAfter;
+    
+    // Find the most recent date for each arch
+    // History is stored newest first (index 0 is most recent)
+    let lastTopDate = null;
+    let lastBottomDate = null;
+    let lastBothDate = null;
+    
+    // Iterate through history (newest to oldest) to find most recent dates
+    for (let i = 0; i < state.history.length; i++) {
+        const entry = state.history[i];
+        const prevEntry = i < state.history.length - 1 ? state.history[i + 1] : null;
+        
+        // Determine which arch(es) were turned in this entry
+        const topTurned = !prevEntry || entry.topDoneAfter > prevEntry.topDoneAfter;
+        const bottomTurned = !prevEntry || entry.bottomDoneAfter > prevEntry.bottomDoneAfter;
+        
+        // Update last dates for each arch
+        if (topTurned && (!lastTopDate || new Date(entry.date) >= new Date(lastTopDate))) {
+            lastTopDate = entry.date;
+        }
+        
+        if (bottomTurned && (!lastBottomDate || new Date(entry.date) >= new Date(lastBottomDate))) {
+            lastBottomDate = entry.date;
+        }
+        
+        // Track most recent date overall
+        if (!lastBothDate || new Date(entry.date) >= new Date(lastBothDate)) {
+            lastBothDate = entry.date;
+        }
+    }
+    
+    state.lastTopTurnDate = lastTopDate;
+    state.lastBottomTurnDate = lastBottomDate;
+    state.lastTurnDate = lastBothDate;
+}
+
+async function undoLastLog() {
+    if (state.history.length === 0) {
+        return false;
+    }
+    
+    state.history.shift();
+    recalculateStateFromHistory();
+    await saveState();
+    return true;
+}
+
+async function undoTurnAtIndex(index) {
+    if (index < 0 || index >= state.history.length) {
+        return false;
+    }
+    
+    // Remove the entry at the specified index
+    state.history.splice(index, 1);
+    recalculateStateFromHistory();
+    await saveState();
+    return true;
+}
+
+async function updateTurnDate(index, newDate) {
+    if (index < 0 || index >= state.history.length) {
+        return false;
+    }
+    
+    const dateStr = dateToISOString(new Date(newDate));
+    if (!dateStr) {
+        return false;
+    }
+    
+    // Update the date
+    state.history[index].date = dateStr;
+    
+    // Recalculate last turn dates
+    recalculateStateFromHistory();
     await saveState();
     return true;
 }
@@ -568,13 +608,19 @@ function render() {
         historyList.innerHTML = '<p class="empty-state">No turns logged yet.</p>';
     } else {
         const recentHistory = state.history.slice(0, 10);
-        historyList.innerHTML = recentHistory.map(entry => {
+        historyList.innerHTML = recentHistory.map((entry, index) => {
             const noteHtml = entry.note ? `<div class="history-note">"${entry.note}"</div>` : '';
             return `
                 <div class="history-item">
-                    <div class="history-date">${formatDate(entry.date)}</div>
-                    ${noteHtml}
-                    <div class="history-counters">Top: ${entry.topDoneAfter}/${state.topTotal}, Bottom: ${entry.bottomDoneAfter}/${state.bottomTotal}</div>
+                    <div class="history-item-content">
+                        <div class="history-date">${formatDate(entry.date)}</div>
+                        ${noteHtml}
+                        <div class="history-counters">Top: ${entry.topDoneAfter}/${state.topTotal}, Bottom: ${entry.bottomDoneAfter}/${state.bottomTotal}</div>
+                    </div>
+                    <div class="history-item-actions">
+                        <button class="btn-icon btn-edit" data-index="${index}" aria-label="Edit date">✏️</button>
+                        <button class="btn-icon btn-undo" data-index="${index}" aria-label="Undo turn">↩️</button>
+                    </div>
                 </div>
             `;
         }).join('');
@@ -726,6 +772,32 @@ function attachEventListeners() {
         };
     }
     
+    // Edit date modal buttons
+    const confirmEditDateBtn = document.getElementById('confirmEditDateBtn');
+    if (confirmEditDateBtn && !confirmEditDateBtn.dataset.listenerAttached) {
+        confirmEditDateBtn.dataset.listenerAttached = 'true';
+        confirmEditDateBtn.onclick = async () => {
+            const dateInput = document.getElementById('editDateInput');
+            const index = parseInt(dateInput.dataset.index);
+            const newDate = dateInput.value;
+            
+            if (newDate && await updateTurnDate(index, newDate)) {
+                document.getElementById('editDateModal').classList.add('hidden');
+                render();
+            } else {
+                alert('Failed to update date. Please try again.');
+            }
+        };
+    }
+    
+    const cancelEditDateBtn = document.getElementById('cancelEditDateBtn');
+    if (cancelEditDateBtn && !cancelEditDateBtn.dataset.listenerAttached) {
+        cancelEditDateBtn.dataset.listenerAttached = 'true';
+        cancelEditDateBtn.onclick = () => {
+            document.getElementById('editDateModal').classList.add('hidden');
+        };
+    }
+    
     // Settings button
     const settingsBtn = document.getElementById('settingsBtn');
     if (settingsBtn && !settingsBtn.dataset.listenerAttached) {
@@ -760,6 +832,36 @@ function attachEventListeners() {
     
     // Settings form inputs - only setup once, not on every render
     // setupSettingsForm() is called separately when settings panel opens
+    
+    // History item buttons (undo and edit)
+    document.querySelectorAll('.btn-undo').forEach(btn => {
+        if (!btn.dataset.listenerAttached) {
+            btn.dataset.listenerAttached = 'true';
+            btn.onclick = async () => {
+                const index = parseInt(btn.dataset.index);
+                if (confirm('Are you sure you want to undo this turn? This will remove it from history and adjust the counts.')) {
+                    if (await undoTurnAtIndex(index)) {
+                        render();
+                    }
+                }
+            };
+        }
+    });
+    
+    document.querySelectorAll('.btn-edit').forEach(btn => {
+        if (!btn.dataset.listenerAttached) {
+            btn.dataset.listenerAttached = 'true';
+            btn.onclick = () => {
+                const index = parseInt(btn.dataset.index);
+                const entry = state.history[index];
+                const editModal = document.getElementById('editDateModal');
+                const dateInput = document.getElementById('editDateInput');
+                dateInput.value = entry.date;
+                dateInput.dataset.index = index;
+                editModal.classList.remove('hidden');
+            };
+        }
+    });
 }
 
 function updateSettingsForm() {
@@ -916,6 +1018,13 @@ document.addEventListener('click', (e) => {
     if (noteModal && !noteModal.classList.contains('hidden')) {
         if (e.target === noteModal) {
             noteModal.classList.add('hidden');
+        }
+    }
+    
+    const editDateModal = document.getElementById('editDateModal');
+    if (editDateModal && !editDateModal.classList.contains('hidden')) {
+        if (e.target === editDateModal) {
+            editDateModal.classList.add('hidden');
         }
     }
     
