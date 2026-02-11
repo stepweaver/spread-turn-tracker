@@ -110,19 +110,16 @@ module.exports = async (req, res) => {
 
             dbUser = newUser;
 
-            // Initialize tracker data for new user
+            // Initialize settings for new user
             await supabase
-                .from('tracker_data')
+                .from('settings')
                 .insert({
                     user_id: dbUser.id,
                     top_total: 27,
                     bottom_total: 23,
-                    top_done: 1,
-                    bottom_done: 1,
                     interval_days: 2,
                     child_name: 'Child',
-                    log_together: true,
-                    history: []
+                    schedule_type: 'every_n_days'
                 });
         }
 

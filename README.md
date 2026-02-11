@@ -1,4 +1,4 @@
-# Spreader Turn Tracker
+# Expander Turn Tracker
 
 A secure, mobile-first web app for tracking orthodontic expander turns. Perfect for families who need to track turns every other day and ensure they don't miss any appointments. Data is stored securely in Supabase and syncs across all devices.
 

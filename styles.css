@@ -619,6 +619,28 @@ header h1:focus {
     margin-top: 0.25rem;
 }
 
+.history-turns {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.history-turn-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    background-color: rgba(255, 0, 128, 0.05);
+    border-radius: calc(var(--border-radius) / 2);
+    border: 1px solid rgba(255, 0, 128, 0.2);
+}
+
+.history-turn-item span {
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
 .btn-icon {
     background: var(--surface-color);
     border: 1px solid rgba(255, 0, 128, 0.3);
@@ -779,6 +801,111 @@ header h1:focus {
 /* Utility */
 .hidden {
     display: none !important;
+}
+
+/* Treatment Notes Section */
+.treatment-notes-section {
+    margin-top: calc(var(--spacing) * 2);
+    padding: var(--spacing);
+    background-color: var(--surface-color);
+    border-radius: var(--border-radius);
+    border: 1px solid rgba(0, 217, 255, 0.3);
+    box-shadow: 0 0 10px rgba(0, 217, 255, 0.1);
+}
+
+.treatment-notes-section h2 {
+    font-size: 1.5rem;
+    margin-bottom: var(--spacing);
+    color: var(--accent-cyan);
+    text-shadow: 0 0 10px rgba(0, 217, 255, 0.5);
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing);
+}
+
+.btn-small {
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+}
+
+.treatment-notes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.treatment-note-item {
+    padding: 0.75rem;
+    border-bottom: 1px solid rgba(0, 217, 255, 0.2);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.75rem;
+    background-color: rgba(0, 217, 255, 0.03);
+    border-radius: calc(var(--border-radius) / 2);
+}
+
+.treatment-note-item:last-child {
+    border-bottom: none;
+}
+
+.treatment-note-content {
+    flex: 1;
+}
+
+.treatment-note-date {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    color: var(--accent-cyan);
+    font-size: 0.9rem;
+}
+
+.treatment-note-text {
+    color: var(--text-color);
+    font-size: 0.95rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
+.treatment-note-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+/* Radio Group */
+.radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.radio-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: calc(var(--border-radius) / 2);
+    transition: background-color 0.2s;
+}
+
+.radio-label:hover {
+    background-color: rgba(255, 0, 128, 0.05);
+}
+
+.radio-label input[type="radio"] {
+    cursor: pointer;
+    accent-color: var(--primary-color);
+}
+
+.radio-label span {
+    user-select: none;
 }
 
 /* Responsive adjustments */

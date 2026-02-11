@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Track orthodontic expander turns for your child">
-    <title>Spreader Turn Tracker</title>
+    <title>Expander Turn Tracker</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -20,11 +20,11 @@
             <div class="progress-card">
                 <h2>Top</h2>
                 <div class="counter">
-                    <span id="topDone">1</span> / <span id="topTotal">27</span>
+                    <span id="topDone">0</span> / <span id="topTotal">27</span>
                 </div>
                 <div class="remaining">
-                    <span id="topRemaining">26</span> remaining
-                    <span class="progress-percentage" id="topPercentage">4%</span>
+                    <span id="topRemaining">27</span> remaining
+                    <span class="progress-percentage" id="topPercentage">0%</span>
                 </div>
                 <div class="progress-bar">
                     <div id="topProgress" class="progress-fill"></div>
@@ -34,11 +34,11 @@
             <div class="progress-card">
                 <h2>Bottom</h2>
                 <div class="counter">
-                    <span id="bottomDone">1</span> / <span id="bottomTotal">23</span>
+                    <span id="bottomDone">0</span> / <span id="bottomTotal">23</span>
                 </div>
                 <div class="remaining">
-                    <span id="bottomRemaining">22</span> remaining
-                    <span class="progress-percentage" id="bottomPercentage">4%</span>
+                    <span id="bottomRemaining">23</span> remaining
+                    <span class="progress-percentage" id="bottomPercentage">0%</span>
                 </div>
                 <div class="progress-bar">
                     <div id="bottomProgress" class="progress-fill"></div>
@@ -68,7 +68,7 @@
         <!-- Action Buttons -->
         <div class="actions">
             <div id="logButtons">
-                <button id="logTurnBtn" class="btn btn-primary">Log today's turn</button>
+                <button id="logTurnBtn" class="btn btn-primary">Log Today's Turn</button>
             </div>
             <div class="secondary-actions">
                 <button id="undoBtn" class="btn btn-secondary">Undo last log</button>
@@ -92,6 +92,19 @@
                     <input type="date" id="settingsInstallDate">
                 </div>
                 <div class="setting-group">
+                    <label>Schedule Type</label>
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="scheduleType" value="every_n_days" checked>
+                            <span>Every N Days</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="scheduleType" value="twice_per_week">
+                            <span>Twice Per Week</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="setting-group">
                     <label for="settingsIntervalDays">Interval (days)</label>
                     <input type="number" id="settingsIntervalDays" min="1" value="2">
                 </div>
@@ -103,20 +116,6 @@
                     <label for="settingsBottomTotal">Bottom Total</label>
                     <input type="number" id="settingsBottomTotal" min="1" value="23">
                 </div>
-                <div class="setting-group">
-                    <label for="settingsTopDone">Top Done</label>
-                    <input type="number" id="settingsTopDone" min="0" value="1">
-                </div>
-                <div class="setting-group">
-                    <label for="settingsBottomDone">Bottom Done</label>
-                    <input type="number" id="settingsBottomDone" min="0" value="1">
-                </div>
-                <div class="setting-group">
-                    <label class="toggle-label">
-                        <input type="checkbox" id="settingsLogTogether" checked>
-                        <span>Log top and bottom together</span>
-                    </label>
-                </div>
             </div>
         </div>
 
@@ -127,13 +126,24 @@
                 <p class="empty-state">No turns logged yet.</p>
             </div>
         </div>
+
+        <!-- Treatment Notes Section -->
+        <div class="treatment-notes-section">
+            <div class="section-header">
+                <h2>Treatment Notes</h2>
+                <button id="addTreatmentNoteBtn" class="btn btn-secondary btn-small">+ Add Note</button>
+            </div>
+            <div id="treatmentNotesList" class="treatment-notes-list">
+                <p class="empty-state">No treatment notes yet.</p>
+            </div>
+        </div>
     </div>
 
     <!-- Reset Confirmation Modal -->
     <div id="resetModal" class="modal hidden">
         <div class="modal-content">
-            <h2>Reset All Data?</h2>
-            <p>This will reset all counters, history, and settings to defaults. This cannot be undone.</p>
+            <h2>Reset All Turns?</h2>
+            <p>This will delete all turn history. Settings will be preserved. This cannot be undone.</p>
             <div class="modal-actions">
                 <button id="confirmResetBtn" class="btn btn-danger">Reset</button>
                 <button id="cancelResetBtn" class="btn btn-secondary">Cancel</button>
@@ -153,17 +163,21 @@
         </div>
     </div>
 
-    <!-- Edit Date Modal -->
-    <div id="editDateModal" class="modal hidden">
+    <!-- Treatment Note Modal -->
+    <div id="treatmentNoteModal" class="modal hidden">
         <div class="modal-content">
-            <h2>Edit Turn Date</h2>
+            <h2 id="treatmentNoteModalTitle">Add Treatment Note</h2>
             <div class="setting-group">
-                <label for="editDateInput">Date</label>
-                <input type="date" id="editDateInput">
+                <label for="treatmentNoteDateInput">Date</label>
+                <input type="date" id="treatmentNoteDateInput">
+            </div>
+            <div class="setting-group">
+                <label for="treatmentNoteTextInput">Note</label>
+                <textarea id="treatmentNoteTextInput" placeholder="Enter treatment note, visit details, or call notes..." rows="4"></textarea>
             </div>
             <div class="modal-actions">
-                <button id="confirmEditDateBtn" class="btn btn-primary">Save</button>
-                <button id="cancelEditDateBtn" class="btn btn-secondary">Cancel</button>
+                <button id="saveTreatmentNoteBtn" class="btn btn-primary">Save</button>
+                <button id="cancelTreatmentNoteBtn" class="btn btn-secondary">Cancel</button>
             </div>
         </div>
     </div>
