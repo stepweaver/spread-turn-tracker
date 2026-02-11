@@ -137,8 +137,9 @@ async function loadState() {
             
             // Sort history by date (newest first) to ensure consistency
             state.history.sort((a, b) => {
-                const dateA = new Date(a.date);
-                const dateB = new Date(b.date);
+                const dateA = parseLocalDate(a.date);
+                const dateB = parseLocalDate(b.date);
+                if (!dateA || !dateB) return 0;
                 if (dateA.getTime() !== dateB.getTime()) {
                     return dateB.getTime() - dateA.getTime(); // Newest first
                 }
@@ -227,7 +228,27 @@ function todayMidnight() {
 
 function formatDate(date) {
     if (!date) return 'Never';
-    const d = new Date(date);
+    
+    // Parse date string as local date to avoid timezone issues
+    // If it's already a Date object, use it directly
+    let d;
+    if (date instanceof Date) {
+        d = date;
+    } else if (typeof date === 'string') {
+        // Parse YYYY-MM-DD format as local date (not UTC)
+        const parts = date.split('-');
+        if (parts.length === 3) {
+            const year = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10) - 1; // Month is 0-indexed
+            const day = parseInt(parts[2], 10);
+            d = new Date(year, month, day);
+        } else {
+            d = new Date(date);
+        }
+    } else {
+        d = new Date(date);
+    }
+    
     if (isNaN(d.getTime())) return 'Invalid';
     
     const options = { month: 'short', day: 'numeric', year: 'numeric' };
@@ -260,12 +281,40 @@ function daysBetween(a, b) {
     return diffDays;
 }
 
+// Helper to parse date string as local date (not UTC) to avoid timezone issues
+function parseLocalDate(dateStr) {
+    if (!dateStr) return null;
+    
+    // If it's already a Date object, return it
+    if (dateStr instanceof Date) {
+        return dateStr;
+    }
+    
+    // Parse YYYY-MM-DD format as local date
+    if (typeof dateStr === 'string') {
+        const parts = dateStr.split('-');
+        if (parts.length === 3) {
+            const year = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10) - 1; // Month is 0-indexed
+            const day = parseInt(parts[2], 10);
+            return new Date(year, month, day);
+        }
+    }
+    
+    // Fallback to standard Date parsing
+    return new Date(dateStr);
+}
+
 function dateToISOString(date) {
     if (!date) return null;
-    const d = new Date(date);
-    if (isNaN(d.getTime())) return null;
+    const d = parseLocalDate(date);
+    if (!d || isNaN(d.getTime())) return null;
     d.setHours(0, 0, 0, 0);
-    return d.toISOString().split('T')[0];
+    // Format as YYYY-MM-DD using local date components
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 }
 
 // Core Logic Functions
@@ -406,16 +455,21 @@ function recalculateStateFromHistory() {
         const bottomTurned = !prevEntry || entry.bottomDoneAfter > prevEntry.bottomDoneAfter;
         
         // Update last dates for each arch
-        if (topTurned && (!lastTopDate || new Date(entry.date) >= new Date(lastTopDate))) {
+        const entryDate = parseLocalDate(entry.date);
+        const lastTopDateParsed = lastTopDate ? parseLocalDate(lastTopDate) : null;
+        const lastBottomDateParsed = lastBottomDate ? parseLocalDate(lastBottomDate) : null;
+        const lastBothDateParsed = lastBothDate ? parseLocalDate(lastBothDate) : null;
+        
+        if (topTurned && entryDate && (!lastTopDateParsed || entryDate >= lastTopDateParsed)) {
             lastTopDate = entry.date;
         }
         
-        if (bottomTurned && (!lastBottomDate || new Date(entry.date) >= new Date(lastBottomDate))) {
+        if (bottomTurned && entryDate && (!lastBottomDateParsed || entryDate >= lastBottomDateParsed)) {
             lastBottomDate = entry.date;
         }
         
         // Track most recent date overall
-        if (!lastBothDate || new Date(entry.date) >= new Date(lastBothDate)) {
+        if (entryDate && (!lastBothDateParsed || entryDate >= lastBothDateParsed)) {
             lastBothDate = entry.date;
         }
     }
@@ -450,29 +504,46 @@ async function undoTurnAtIndex(index) {
 
 async function updateTurnDate(index, newDate) {
     if (index < 0 || index >= state.history.length) {
-        return false;
-    }
-    
-    const dateStr = dateToISOString(new Date(newDate));
-    if (!dateStr) {
+        console.error('Invalid index for updateTurnDate:', index, 'History length:', state.history.length);
         return false;
     }
     
     // Store the entry before updating to ensure we don't lose it
-    const entryToUpdate = state.history[index];
+    const entryToUpdate = { ...state.history[index] }; // Create a copy
     if (!entryToUpdate) {
         console.error('Entry not found at index:', index);
         return false;
     }
     
-    // Update the date
-    entryToUpdate.date = dateStr;
+    console.log('Updating entry at index', index, 'from date', entryToUpdate.date, 'to', newDate);
+    
+    // Parse the new date - if it's already in YYYY-MM-DD format, use it directly
+    // Otherwise, parse it as a date and convert to ISO string
+    let dateStr;
+    if (typeof newDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
+        // Already in YYYY-MM-DD format
+        dateStr = newDate;
+    } else {
+        dateStr = dateToISOString(new Date(newDate));
+    }
+    
+    if (!dateStr) {
+        console.error('Failed to parse date:', newDate);
+        return false;
+    }
+    
+    console.log('Parsed date string:', dateStr);
+    
+    // Update the date in the original entry
+    state.history[index].date = dateStr;
     
     // Sort history by date (newest first) to maintain consistency
     // Use timestamp as secondary sort to preserve order for same dates
+    const beforeSortLength = state.history.length;
     state.history.sort((a, b) => {
-        const dateA = new Date(a.date);
-        const dateB = new Date(b.date);
+        const dateA = parseLocalDate(a.date);
+        const dateB = parseLocalDate(b.date);
+        if (!dateA || !dateB) return 0;
         if (dateA.getTime() !== dateB.getTime()) {
             return dateB.getTime() - dateA.getTime(); // Newest first
         }
@@ -482,21 +553,67 @@ async function updateTurnDate(index, newDate) {
         return timestampB - timestampA;
     });
     
+    const afterSortLength = state.history.length;
+    console.log('History length before sort:', beforeSortLength, 'after sort:', afterSortLength);
+    
+    // Verify the entry still exists after sorting
+    const entryStillExists = state.history.some(e => 
+        e.date === dateStr && 
+        e.timestamp === entryToUpdate.timestamp &&
+        e.topDoneAfter === entryToUpdate.topDoneAfter &&
+        e.bottomDoneAfter === entryToUpdate.bottomDoneAfter
+    );
+    
+    if (!entryStillExists) {
+        console.error('Entry disappeared after sorting! Restoring...');
+        // Find where it should be inserted
+        const insertIndex = state.history.findIndex(e => {
+            const eDate = parseLocalDate(e.date);
+            const entryDate = parseLocalDate(dateStr);
+            return eDate && entryDate && eDate < entryDate;
+        });
+        if (insertIndex === -1) {
+            state.history.push(entryToUpdate);
+        } else {
+            state.history.splice(insertIndex, 0, entryToUpdate);
+        }
+        // Re-sort to be safe
+        state.history.sort((a, b) => {
+            const dateA = parseLocalDate(a.date);
+            const dateB = parseLocalDate(b.date);
+            if (!dateA || !dateB) return 0;
+            if (dateA.getTime() !== dateB.getTime()) {
+                return dateB.getTime() - dateA.getTime();
+            }
+            const timestampA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+            const timestampB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+            return timestampB - timestampA;
+        });
+    }
+    
     // Recalculate last turn dates
     recalculateStateFromHistory();
     
     // Save state - wrap in try-catch to ensure entry isn't lost on error
     try {
         await saveState();
+        console.log('Date update saved successfully. History length:', state.history.length);
         return true;
     } catch (error) {
         console.error('Error saving after date update:', error);
-        // Restore the entry if save failed
-        if (!state.history.includes(entryToUpdate)) {
+        console.error('Current history:', state.history);
+        // Restore the entry if save failed and it's missing
+        const stillExists = state.history.some(e => 
+            e.date === dateStr && 
+            e.timestamp === entryToUpdate.timestamp
+        );
+        if (!stillExists) {
+            console.error('Entry missing after save error, restoring...');
             state.history.push(entryToUpdate);
             state.history.sort((a, b) => {
-                const dateA = new Date(a.date);
-                const dateB = new Date(b.date);
+                const dateA = parseLocalDate(a.date);
+                const dateB = parseLocalDate(b.date);
+                if (!dateA || !dateB) return 0;
                 if (dateA.getTime() !== dateB.getTime()) {
                     return dateB.getTime() - dateA.getTime();
                 }
