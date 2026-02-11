@@ -116,9 +116,39 @@ async function loadState() {
         // Merge with defaults to ensure all fields exist
         state = { ...defaultState, ...data };
         
-        // Ensure history is an array
+        // Ensure history is an array and validate entries
         if (!Array.isArray(state.history)) {
+            console.warn('History is not an array, resetting to empty array');
             state.history = [];
+        } else {
+            // Filter out any invalid entries and ensure all have required fields
+            state.history = state.history.filter(entry => {
+                if (!entry || typeof entry !== 'object') {
+                    console.warn('Invalid history entry found:', entry);
+                    return false;
+                }
+                // Ensure entry has a date
+                if (!entry.date) {
+                    console.warn('History entry missing date:', entry);
+                    return false;
+                }
+                return true;
+            });
+            
+            // Sort history by date (newest first) to ensure consistency
+            state.history.sort((a, b) => {
+                const dateA = new Date(a.date);
+                const dateB = new Date(b.date);
+                if (dateA.getTime() !== dateB.getTime()) {
+                    return dateB.getTime() - dateA.getTime(); // Newest first
+                }
+                // If dates are equal, sort by timestamp (newest first)
+                const timestampA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+                const timestampB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+                return timestampB - timestampA;
+            });
+            
+            console.log('Loaded state with history length:', state.history.length);
         }
         
         return state;
@@ -132,26 +162,40 @@ async function loadState() {
 
 async function saveState() {
     try {
+        // Ensure history is an array before saving
+        if (!Array.isArray(state.history)) {
+            console.warn('History is not an array, resetting to empty array');
+            state.history = [];
+        }
+        
+        const payload = {
+            topTotal: state.topTotal,
+            bottomTotal: state.bottomTotal,
+            topDone: state.topDone,
+            bottomDone: state.bottomDone,
+            intervalDays: state.intervalDays,
+            installDate: state.installDate,
+            lastTurnDate: state.lastTurnDate,
+            lastTopTurnDate: state.lastTopTurnDate,
+            lastBottomTurnDate: state.lastBottomTurnDate,
+            childName: state.childName,
+            logTogether: state.logTogether,
+            history: state.history
+        };
+        
+        console.log('Saving state with history length:', state.history.length);
+        
         await apiCall('/api/data', {
             method: 'POST',
-            body: JSON.stringify({
-                topTotal: state.topTotal,
-                bottomTotal: state.bottomTotal,
-                topDone: state.topDone,
-                bottomDone: state.bottomDone,
-                intervalDays: state.intervalDays,
-                installDate: state.installDate,
-                lastTurnDate: state.lastTurnDate,
-                lastTopTurnDate: state.lastTopTurnDate,
-                lastBottomTurnDate: state.lastBottomTurnDate,
-                childName: state.childName,
-                logTogether: state.logTogether,
-                history: state.history
-            })
+            body: JSON.stringify(payload)
         });
+        
+        console.log('State saved successfully');
     } catch (error) {
         console.error('Error saving state:', error);
+        console.error('Current history:', state.history);
         alert('Failed to save data: ' + error.message);
+        throw error; // Re-throw so callers can handle it
     }
 }
 
@@ -414,13 +458,56 @@ async function updateTurnDate(index, newDate) {
         return false;
     }
     
+    // Store the entry before updating to ensure we don't lose it
+    const entryToUpdate = state.history[index];
+    if (!entryToUpdate) {
+        console.error('Entry not found at index:', index);
+        return false;
+    }
+    
     // Update the date
-    state.history[index].date = dateStr;
+    entryToUpdate.date = dateStr;
+    
+    // Sort history by date (newest first) to maintain consistency
+    // Use timestamp as secondary sort to preserve order for same dates
+    state.history.sort((a, b) => {
+        const dateA = new Date(a.date);
+        const dateB = new Date(b.date);
+        if (dateA.getTime() !== dateB.getTime()) {
+            return dateB.getTime() - dateA.getTime(); // Newest first
+        }
+        // If dates are equal, sort by timestamp (newest first)
+        const timestampA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+        const timestampB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+        return timestampB - timestampA;
+    });
     
     // Recalculate last turn dates
     recalculateStateFromHistory();
-    await saveState();
-    return true;
+    
+    // Save state - wrap in try-catch to ensure entry isn't lost on error
+    try {
+        await saveState();
+        return true;
+    } catch (error) {
+        console.error('Error saving after date update:', error);
+        // Restore the entry if save failed
+        if (!state.history.includes(entryToUpdate)) {
+            state.history.push(entryToUpdate);
+            state.history.sort((a, b) => {
+                const dateA = new Date(a.date);
+                const dateB = new Date(b.date);
+                if (dateA.getTime() !== dateB.getTime()) {
+                    return dateB.getTime() - dateA.getTime();
+                }
+                const timestampA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+                const timestampB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+                return timestampB - timestampA;
+            });
+            recalculateStateFromHistory();
+        }
+        throw error;
+    }
 }
 
 async function reset() {
