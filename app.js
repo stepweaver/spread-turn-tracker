@@ -475,10 +475,18 @@ function render() {
     
     const topNext = getNextDueDate('top');
     const bottomNext = getNextDueDate('bottom');
-    const nextDue = topNext && bottomNext
+    let nextDue = topNext && bottomNext
         ? (topNext < bottomNext ? topNext : bottomNext)
         : (topNext || bottomNext);
-    document.getElementById('nextDueDate').textContent = formatDate(nextDue);
+    // If next due is today or in the past, show "Today" so we never show a date before last logged
+    const today = todayMidnight();
+    if (nextDue) {
+        const nextDueDay = new Date(nextDue.getFullYear(), nextDue.getMonth(), nextDue.getDate());
+        if (nextDueDay.getTime() <= today.getTime()) {
+            nextDue = today;
+        }
+    }
+    document.getElementById('nextDueDate').textContent = nextDue ? formatDate(nextDue) : '-';
     
     const overallStatus = topStatus === 'complete' && bottomStatus === 'complete' 
         ? 'complete'
