@@ -487,28 +487,45 @@ function render() {
     statusEl.textContent = overallStatus.toUpperCase();
     statusEl.className = `status-badge ${overallStatus}`;
     
-    // Update log buttons
+    // Update log buttons: always show tandem when both can log, and always show individual options
     const logButtonsContainer = document.getElementById('logButtons');
     const topCan = canLogTurn('top');
     const bottomCan = canLogTurn('bottom');
+    const bothCanLog = topCan.canLog && bottomCan.canLog;
+    const topComplete = topStatus === 'complete';
+    const bottomComplete = bottomStatus === 'complete';
     
     let buttonsHTML = '';
-    if (topCan.canLog && bottomCan.canLog) {
-        buttonsHTML += '<button id="logTurnBtn" class="btn btn-primary">Log Today\'s Turn</button>';
-    } else if (topCan.canLog) {
-        buttonsHTML += '<button id="logTopBtn" class="btn btn-primary">Log Top Turn</button>';
-    } else if (bottomCan.canLog) {
-        buttonsHTML += '<button id="logBottomBtn" class="btn btn-primary">Log Bottom Turn</button>';
+    
+    if (topComplete && bottomComplete) {
+        buttonsHTML += '<button class="btn btn-primary" disabled>All Complete!</button>';
     } else {
-        if (topStatus === 'complete' && bottomStatus === 'complete') {
-            buttonsHTML += '<button class="btn btn-primary" disabled>All Complete!</button>';
-        } else {
-            const reason = topCan.reason || bottomCan.reason;
-            if (reason === 'wait') {
-                const daysRemaining = topCan.daysRemaining || bottomCan.daysRemaining || 0;
-                buttonsHTML += `<button class="btn btn-primary" disabled>Wait ${daysRemaining} day(s)</button>`;
+        // Primary: Log both when both are due (tandem preferred)
+        if (bothCanLog) {
+            buttonsHTML += '<button id="logTurnBtn" class="btn btn-primary">Log Today\'s Turn</button>';
+        }
+        
+        // Individual options: Log Top and Log Bottom (enabled when due, disabled with reason when not)
+        if (!topComplete) {
+            if (topCan.canLog) {
+                const cls = bothCanLog ? 'btn btn-secondary' : 'btn btn-primary';
+                buttonsHTML += `<button id="logTopBtn" class="${cls}">Log Top Only</button>`;
             } else {
-                buttonsHTML += '<button class="btn btn-primary" disabled>Cannot Log</button>';
+                const waitMsg = topCan.reason === 'wait' && topCan.daysRemaining != null
+                    ? `Top: Wait ${topCan.daysRemaining} day(s)`
+                    : 'Top: Not due yet';
+                buttonsHTML += `<button class="btn btn-secondary" disabled>${waitMsg}</button>`;
+            }
+        }
+        if (!bottomComplete) {
+            if (bottomCan.canLog) {
+                const cls = bothCanLog ? 'btn btn-secondary' : 'btn btn-primary';
+                buttonsHTML += `<button id="logBottomBtn" class="${cls}">Log Bottom Only</button>`;
+            } else {
+                const waitMsg = bottomCan.reason === 'wait' && bottomCan.daysRemaining != null
+                    ? `Bottom: Wait ${bottomCan.daysRemaining} day(s)`
+                    : 'Bottom: Not due yet';
+                buttonsHTML += `<button class="btn btn-secondary" disabled>${waitMsg}</button>`;
             }
         }
     }
