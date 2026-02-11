@@ -502,6 +502,61 @@ async function undoTurnAtIndex(index) {
     return true;
 }
 
+// Undo a specific arch (top or bottom) from a history entry
+async function undoArchAtIndex(index, arch) {
+    if (index < 0 || index >= state.history.length) {
+        return false;
+    }
+    
+    const entry = state.history[index];
+    const prevEntry = index < state.history.length - 1 ? state.history[index + 1] : null;
+    
+    // Determine which arches were turned in this entry
+    const topTurned = !prevEntry || entry.topDoneAfter > prevEntry.topDoneAfter;
+    const bottomTurned = !prevEntry || entry.bottomDoneAfter > prevEntry.bottomDoneAfter;
+    
+    // Check if the requested arch was actually turned in this entry
+    if (arch === 'top' && !topTurned) {
+        console.warn('Top arch was not turned in this entry');
+        return false;
+    }
+    if (arch === 'bottom' && !bottomTurned) {
+        console.warn('Bottom arch was not turned in this entry');
+        return false;
+    }
+    
+    // Get the previous counts (before this entry was logged)
+    const prevTopDone = prevEntry ? prevEntry.topDoneAfter : Math.max(0, entry.topDoneAfter - (topTurned ? 1 : 0));
+    const prevBottomDone = prevEntry ? prevEntry.bottomDoneAfter : Math.max(0, entry.bottomDoneAfter - (bottomTurned ? 1 : 0));
+    
+    // Calculate new counts after undoing the specified arch
+    let newTopDone = entry.topDoneAfter;
+    let newBottomDone = entry.bottomDoneAfter;
+    
+    if (arch === 'top' && topTurned) {
+        newTopDone = prevTopDone;
+    }
+    if (arch === 'bottom' && bottomTurned) {
+        newBottomDone = prevBottomDone;
+    }
+    
+    // If both arches are back to previous state, remove the entry entirely
+    // Otherwise, update the entry with the new counts
+    if (newTopDone === prevTopDone && newBottomDone === prevBottomDone) {
+        // Both arches undone - remove the entry
+        state.history.splice(index, 1);
+    } else {
+        // Only one arch undone - update the entry to reflect the new state
+        entry.topDoneAfter = newTopDone;
+        entry.bottomDoneAfter = newBottomDone;
+    }
+    
+    // Recalculate state from history
+    recalculateStateFromHistory();
+    await saveState();
+    return true;
+}
+
 async function updateTurnDate(index, newDate) {
     if (index < 0 || index >= state.history.length) {
         console.error('Invalid index for updateTurnDate:', index, 'History length:', state.history.length);
@@ -814,6 +869,32 @@ function render() {
         const recentHistory = state.history.slice(0, 10);
         historyList.innerHTML = recentHistory.map((entry, index) => {
             const noteHtml = entry.note ? `<div class="history-note">"${entry.note}"</div>` : '';
+            
+            // Determine which arches were turned in this entry
+            const prevEntry = index < state.history.length - 1 ? state.history[index + 1] : null;
+            const topTurned = !prevEntry || entry.topDoneAfter > prevEntry.topDoneAfter;
+            const bottomTurned = !prevEntry || entry.bottomDoneAfter > prevEntry.bottomDoneAfter;
+            
+            // Build undo buttons based on which arches were turned
+            let undoButtons = '';
+            if (topTurned && bottomTurned) {
+                // Both arches turned - show separate undo buttons
+                undoButtons = `
+                    <button class="btn-icon btn-undo-arch" data-index="${index}" data-arch="top" aria-label="Undo top turn" title="Undo top turn">↩️ T</button>
+                    <button class="btn-icon btn-undo-arch" data-index="${index}" data-arch="bottom" aria-label="Undo bottom turn" title="Undo bottom turn">↩️ B</button>
+                    <button class="btn-icon btn-undo" data-index="${index}" aria-label="Undo both turns" title="Undo both turns">↩️</button>
+                `;
+            } else if (topTurned) {
+                // Only top turned
+                undoButtons = `<button class="btn-icon btn-undo-arch" data-index="${index}" data-arch="top" aria-label="Undo top turn" title="Undo top turn">↩️ T</button>`;
+            } else if (bottomTurned) {
+                // Only bottom turned
+                undoButtons = `<button class="btn-icon btn-undo-arch" data-index="${index}" data-arch="bottom" aria-label="Undo bottom turn" title="Undo bottom turn">↩️ B</button>`;
+            } else {
+                // Fallback - shouldn't happen, but show generic undo
+                undoButtons = `<button class="btn-icon btn-undo" data-index="${index}" aria-label="Undo turn">↩️</button>`;
+            }
+            
             return `
                 <div class="history-item">
                     <div class="history-item-content">
@@ -822,8 +903,8 @@ function render() {
                         <div class="history-counters">Top: ${entry.topDoneAfter}/${state.topTotal}, Bottom: ${entry.bottomDoneAfter}/${state.bottomTotal}</div>
                     </div>
                     <div class="history-item-actions">
-                        <button class="btn-icon btn-edit" data-index="${index}" aria-label="Edit date">✏️</button>
-                        <button class="btn-icon btn-undo" data-index="${index}" aria-label="Undo turn">↩️</button>
+                        <button class="btn-icon btn-edit" data-index="${index}" aria-label="Edit date" title="Edit date">✏️</button>
+                        ${undoButtons}
                     </div>
                 </div>
             `;
@@ -1045,6 +1126,23 @@ function attachEventListeners() {
                 const index = parseInt(btn.dataset.index);
                 if (confirm('Are you sure you want to undo this turn? This will remove it from history and adjust the counts.')) {
                     if (await undoTurnAtIndex(index)) {
+                        render();
+                    }
+                }
+            };
+        }
+    });
+    
+    // Individual arch undo buttons
+    document.querySelectorAll('.btn-undo-arch').forEach(btn => {
+        if (!btn.dataset.listenerAttached) {
+            btn.dataset.listenerAttached = 'true';
+            btn.onclick = async () => {
+                const index = parseInt(btn.dataset.index);
+                const arch = btn.dataset.arch; // 'top' or 'bottom'
+                const archName = arch === 'top' ? 'top' : 'bottom';
+                if (confirm(`Are you sure you want to undo the ${archName} turn? This will adjust the count for that arch.`)) {
+                    if (await undoArchAtIndex(index, arch)) {
                         render();
                     }
                 }

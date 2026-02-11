@@ -658,6 +658,18 @@ header h1:focus {
     box-shadow: 0 0 10px rgba(255, 170, 0, 0.4);
 }
 
+.btn-undo-arch {
+    font-size: 0.85rem;
+    min-width: 40px;
+    padding: 0.4rem 0.3rem;
+}
+
+.btn-undo-arch:hover {
+    background-color: rgba(255, 170, 0, 0.15);
+    border-color: var(--warning-color);
+    box-shadow: 0 0 10px rgba(255, 170, 0, 0.5);
+}
+
 .empty-state {
     text-align: center;
     color: var(--text-secondary);
