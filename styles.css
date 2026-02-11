@@ -325,6 +325,22 @@ header h1:focus {
     font-size: 0.9rem;
 }
 
+.status-item-next-due {
+    flex-wrap: wrap;
+    align-items: baseline;
+}
+
+.status-item-next-due .status-hint {
+    width: 100%;
+    margin-top: 0.2rem;
+}
+
+.status-hint {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    opacity: 0.9;
+}
+
 .status-label {
     color: var(--text-secondary);
     font-weight: 500;

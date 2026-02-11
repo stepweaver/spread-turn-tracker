@@ -488,6 +488,17 @@ function render() {
     }
     document.getElementById('nextDueDate').textContent = nextDue ? formatDate(nextDue) : '-';
     
+    // Show schedule hint so it's clear Next due uses the interval from settings
+    const scheduleHint = document.getElementById('nextDueScheduleHint');
+    if (scheduleHint) {
+        if (state.settings.scheduleType === 'twice_per_week') {
+            scheduleHint.textContent = 'twice per week';
+        } else {
+            const n = state.settings.intervalDays;
+            scheduleHint.textContent = n === 1 ? 'every day' : `every ${n} days`;
+        }
+    }
+    
     const overallStatus = topStatus === 'complete' && bottomStatus === 'complete' 
         ? 'complete'
         : (topStatus === 'ready' || bottomStatus === 'ready' ? 'ready' : 'wait');
