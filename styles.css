@@ -580,9 +580,42 @@ header h1:focus {
     margin-top: calc(var(--spacing) * 2);
 }
 
-.history-section h2 {
+.history-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing);
+    cursor: pointer;
+    list-style: none;
+    padding: 0.25rem 0;
+    user-select: none;
+}
+
+.history-section-header::-webkit-details-marker {
+    display: none;
+}
+
+.history-section-header h2 {
     font-size: 1.25rem;
-    margin-bottom: var(--spacing);
+    margin: 0;
+}
+
+.history-section[open] .history-section-header h2 {
+    margin-bottom: 0;
+}
+
+.history-toggle-icon {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    transition: transform 0.2s ease;
+}
+
+.history-section[open] .history-toggle-icon {
+    transform: rotate(90deg);
+}
+
+.history-section .history-list {
+    margin-top: var(--spacing);
 }
 
 .history-list {
