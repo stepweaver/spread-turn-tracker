@@ -60,9 +60,16 @@ The orthodontist typically completes the first turn on install day, so the app s
 
 Users are configured via the `APP_USERS` environment variable (set in Step 5). This keeps credentials secure and out of your codebase.
 
-The format is a JSON array. Example:
+The format is a JSON array. Use `password` (plain text) or `passwordHash` (bcrypt, recommended):
+
 ```json
 [{"username":"stephen","password":"your-secure-password","displayName":"Dad"},{"username":"kelsey","password":"your-secure-password","displayName":"Mom"}]
+```
+
+For secure storage, use bcrypt hashes (generate with `require('bcryptjs').hashSync('yourpassword', 10)`):
+
+```json
+[{"username":"stephen","passwordHash":"$2a$10$...","displayName":"Dad"}]
 ```
 
 You'll set this in Vercel environment variables (see Step 5).
@@ -124,8 +131,9 @@ You'll set this in Vercel environment variables (see Step 5).
 
 6. Redeploy to apply environment variables:
    ```bash
-   vercel --prod
+   npm run deploy
    ```
+   or `vercel --prod`
 
 #### Option B: Deploy via Vercel Dashboard
 
@@ -140,11 +148,9 @@ You'll set this in Vercel environment variables (see Step 5).
 7. Add these variables:
    - `SUPABASE_URL`: Your Supabase Project URL
    - `SUPABASE_SERVICE_KEY`: Your Supabase Service Role Key
-   - `JWT_SECRET`: A random secret string (generate one: `openssl rand -base64 32`)
-   - `APP_USERS`: JSON array of users, for example:
-     ```json
-     [{"username":"stephen","password":"your-secure-password","displayName":"Dad"},{"username":"kelsey","password":"your-secure-password","displayName":"Mom"}]
-     ```
+   - `JWT_SECRET`: A random secret string (required; generate one: `openssl rand -base64 32`)
+   - `APP_USERS`: JSON array of users (see Step 3 for format)
+   - `ALLOWED_ORIGIN` (optional): Restrict CORS to a specific origin, e.g. `https://your-app.vercel.app`
 8. Go to **Deployments** tab, click the three dots on the latest deployment, and select "Redeploy"
 
 ### Step 6: Test Your Deployment
@@ -176,12 +182,14 @@ For local development:
    APP_USERS='[{"username":"stephen","password":"your-secure-password","displayName":"Dad"},{"username":"kelsey","password":"your-secure-password","displayName":"Mom"}]'
    ```
 
-3. Run the development server:
+3. Copy `.env.example` to `.env.local` and fill in your values (or create `.env.local` from the README).
+
+4. Run the development server:
    ```bash
-   vercel dev
+   npm run dev
    ```
 
-4. Open `http://localhost:3000` in your browser
+5. Open `http://127.0.0.1:3000` in your browser
 
 ## Adding to Home Screen (Mobile App Experience)
 
@@ -207,10 +215,13 @@ The app will appear on your home screen and can be opened like a native app.
 
 ## Security Notes
 
-- **Hard-Coded Users**: User credentials are defined in `api/login.js`. Only people you add to this list can access the app.
-- **JWT Tokens**: Authentication uses JWT tokens stored in sessionStorage (cleared when browser closes, but data persists in Supabase)
+- **User Credentials**: Users are configured via the `APP_USERS` environment variable. Use `passwordHash` (bcrypt) for secure storage, or `password` (plain text) for simplicity. Generate hashes with `require('bcryptjs').hashSync('yourpassword', 10)`.
+- **JWT Secret**: `JWT_SECRET` is required. Never use a default or commit it. Generate with `openssl rand -base64 32`.
+- **JWT Tokens**: Authentication uses JWT tokens stored in sessionStorage (cleared when browser closes, but data persists in Supabase).
+- **CORS**: By default, CORS allows your Vercel deployment origin. Set `ALLOWED_ORIGIN` to restrict further (e.g. custom domain).
 - **Service Role Key**: The Supabase service role key has full database access. Keep it secret and never commit it to Git.
-- **HTTPS**: Vercel automatically provides HTTPS for all deployments
+- **RLS**: Row Level Security is enabled in the schema. The API uses the service role key, which bypasses RLS. RLS remains as defense-in-depth if you ever switch to Supabase Auth.
+- **HTTPS**: Vercel automatically provides HTTPS for all deployments.
 - **Data Privacy**: All data is stored in your Supabase database. You control access completely.
 
 ## File Structure
@@ -218,18 +229,24 @@ The app will appear on your home screen and can be opened like a native app.
 ```
 spread-turn-tracker/
 ├── api/
-│   ├── login.js           # Authentication endpoint
-│   ├── verify.js           # Token verification
-│   ├── data.js             # Data CRUD operations
-│   └── hash-password.js    # Utility to hash passwords
+│   ├── lib/
+│   │   ├── auth.js         # JWT verification, CORS helpers
+│   │   └── supabase.js     # Supabase client
+│   ├── login.js            # Authentication endpoint
+│   ├── verify.js            # Token verification
+│   ├── settings.js         # User settings CRUD
+│   ├── turns.js             # Turn logging CRUD
+│   └── treatment-notes.js   # Treatment notes CRUD
 ├── supabase/
 │   ├── schema.sql          # Database schema
-│   └── setup-users.sql     # User setup instructions
+│   ├── setup-users.sql     # User setup instructions
+│   └── migration.sql       # Migration scripts
 ├── index.html              # Main HTML
 ├── styles.css              # All styling
 ├── app.js                  # Frontend application logic
 ├── package.json            # Dependencies
 ├── vercel.json             # Vercel configuration
+├── .env.example            # Environment variable template
 └── README.md               # This file
 ```
 
@@ -243,8 +260,8 @@ spread-turn-tracker/
 
 ### Login fails
 
-- Check that usernames/passwords in `api/login.js` match what you're entering
-- Verify JWT_SECRET is set in Vercel environment variables
+- Check that usernames/passwords in `APP_USERS` match what you're entering
+- Verify JWT_SECRET is set in Vercel environment variables (required, no default)
 - Check Vercel function logs: Vercel Dashboard → Your Project → Functions → View Logs
 
 ### Data not saving

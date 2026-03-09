@@ -1,78 +1,71 @@
-const { createClient } = require('@supabase/supabase-js');
-const jwt = require('jsonwebtoken');
+const { verifyToken, setCorsHeaders } = require('./lib/auth');
+const { getSupabaseClient } = require('./lib/supabase');
+const { getSharedUserId } = require('./lib/shared');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
-// Helper to verify token and get user
-function verifyToken(req) {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        throw new Error('No token provided');
-    }
-    const token = authHeader.substring(7);
-    return jwt.verify(token, JWT_SECRET);
+function isValidDate(str) {
+    if (!str) return true;
+    if (!DATE_REGEX.test(str)) return false;
+    const d = new Date(str);
+    return !isNaN(d.getTime());
 }
 
 module.exports = async (req, res) => {
-    // CORS headers
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, PUT, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
+    setCorsHeaders(res, 'GET, PUT, OPTIONS');
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
 
     try {
-        // Verify authentication
-        const decoded = verifyToken(req);
-        const userId = decoded.userId;
-
-        const supabase = createClient(
-            process.env.SUPABASE_URL,
-            process.env.SUPABASE_SERVICE_KEY
-        );
+        verifyToken(req);
+        const supabase = getSupabaseClient();
+        const sharedUserId = await getSharedUserId(supabase);
+        if (!sharedUserId) {
+            return res.status(500).json({ error: 'No users configured' });
+        }
 
         if (req.method === 'GET') {
-            // Get user settings
-            const { data, error } = await supabase
+            // All users see the same settings (shared family data)
+            // Get first settings row (any user) to support existing data, then prefer shared user
+            const { data: sharedData } = await supabase
                 .from('settings')
                 .select('*')
-                .eq('user_id', userId)
-                .single();
+                .eq('user_id', sharedUserId)
+                .maybeSingle();
 
-            if (error && error.code !== 'PGRST116') { // PGRST116 = not found
-                console.error('Error fetching settings:', error);
-                return res.status(500).json({ error: 'Failed to fetch settings' });
+            let data = sharedData;
+            if (!data) {
+                const { data: fallbackData } = await supabase
+                    .from('settings')
+                    .select('*')
+                    .order('updated_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+                data = fallbackData;
             }
 
-            // If no settings exist, return defaults
             if (!data) {
-                const defaultSettings = {
+                return res.status(200).json({
                     topTotal: 27,
                     bottomTotal: 23,
                     installDate: null,
                     scheduleType: 'every_n_days',
                     intervalDays: 2,
                     childName: 'Child'
-                };
-                return res.status(200).json(defaultSettings);
+                });
             }
 
-            // Transform database fields to frontend format
-            const response = {
+            return res.status(200).json({
                 topTotal: data.top_total,
                 bottomTotal: data.bottom_total,
                 installDate: data.install_date,
                 scheduleType: data.schedule_type,
                 intervalDays: data.interval_days,
                 childName: data.child_name
-            };
-
-            return res.status(200).json(response);
+            });
 
         } else if (req.method === 'PUT') {
-            // Update settings
             const {
                 topTotal,
                 bottomTotal,
@@ -82,43 +75,51 @@ module.exports = async (req, res) => {
                 childName
             } = req.body;
 
-            // Validate schedule type
             if (scheduleType && !['every_n_days', 'twice_per_week'].includes(scheduleType)) {
                 return res.status(400).json({ error: 'scheduleType must be "every_n_days" or "twice_per_week"' });
             }
 
+            const top = topTotal !== undefined ? parseInt(topTotal, 10) : 27;
+            const bottom = bottomTotal !== undefined ? parseInt(bottomTotal, 10) : 23;
+            const interval = intervalDays !== undefined ? parseInt(intervalDays, 10) : 2;
+
+            if (isNaN(top) || top < 1 || top > 999) {
+                return res.status(400).json({ error: 'topTotal must be between 1 and 999' });
+            }
+            if (isNaN(bottom) || bottom < 1 || bottom > 999) {
+                return res.status(400).json({ error: 'bottomTotal must be between 1 and 999' });
+            }
+            if (isNaN(interval) || interval < 1 || interval > 365) {
+                return res.status(400).json({ error: 'intervalDays must be between 1 and 365' });
+            }
+            if (!isValidDate(installDate)) {
+                return res.status(400).json({ error: 'installDate must be YYYY-MM-DD format' });
+            }
+
+            const child = (childName || 'Child').toString().trim();
+            if (child.length > 100) {
+                return res.status(400).json({ error: 'childName must be 100 characters or less' });
+            }
+
             const dataToSave = {
                 user_id: userId,
-                top_total: topTotal,
-                bottom_total: bottomTotal,
+                top_total: top,
+                bottom_total: bottom,
                 install_date: installDate || null,
                 schedule_type: scheduleType || 'every_n_days',
-                interval_days: intervalDays || 2,
-                child_name: childName || 'Child'
+                interval_days: interval,
+                child_name: child || 'Child'
             };
 
-            // Check if settings exist
-            const { data: existing, error: checkError } = await supabase
+            const { data: existing } = await supabase
                 .from('settings')
                 .select('id')
-                .eq('user_id', userId)
-                .single();
+                .eq('user_id', sharedUserId)
+                .maybeSingle();
 
-            let result;
-            if (existing) {
-                // Update existing
-                result = await supabase
-                    .from('settings')
-                    .update(dataToSave)
-                    .eq('user_id', userId)
-                    .select();
-            } else {
-                // Insert new
-                result = await supabase
-                    .from('settings')
-                    .insert(dataToSave)
-                    .select();
-            }
+            const result = existing
+                ? await supabase.from('settings').update(dataToSave).eq('user_id', sharedUserId).select()
+                : await supabase.from('settings').insert(dataToSave).select();
 
             if (result.error) {
                 console.error('Error saving settings:', result.error);
@@ -135,7 +136,9 @@ module.exports = async (req, res) => {
         if (error.message === 'No token provided' || error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
             return res.status(401).json({ error: 'Unauthorized' });
         }
-        
+        if (error.message && error.message.includes('JWT_SECRET')) {
+            return res.status(500).json({ error: 'Server configuration error' });
+        }
         console.error('Settings API error:', error);
         return res.status(500).json({ error: 'Internal server error' });
     }

@@ -1,20 +1,15 @@
 -- Setup Users Script
--- This file shows how to create users with hashed passwords
--- You'll need to generate password hashes using bcrypt
--- 
--- Option 1: Use an online bcrypt generator: https://bcrypt-generator.com/
--- Option 2: Use Node.js: require('bcryptjs').hashSync('yourpassword', 10)
--- Option 3: Use the API endpoint /api/hash-password (see api/hash-password.js)
+-- NOTE: Login credentials are NOT read from this table.
+-- The app authenticates via the APP_USERS environment variable (.env.local).
+-- Users in this table are created automatically on first login from APP_USERS.
 --
--- Then run these INSERT statements in Supabase SQL Editor:
-
+-- This script is for manually pre-creating users (e.g. migration). You'll need
+-- to generate password hashes using bcrypt:
+--   Option 1: https://bcrypt-generator.com/
+--   Option 2: require('bcryptjs').hashSync('yourpassword', 12)
+--
 -- Example (replace with your actual hashed passwords):
 -- INSERT INTO users (username, password_hash, display_name) VALUES
--- ('dad', '$2a$10$YourHashedPasswordHere', 'Dad'),
--- ('mom', '$2a$10$YourHashedPasswordHere', 'Mom')
+-- ('dad', '$2a$12$YourHashedPasswordHere', 'Dad'),
+-- ('mom', '$2a$12$YourHashedPasswordHere', 'Mom')
 -- ON CONFLICT (username) DO NOTHING;
-
--- After creating users, you can also initialize their tracker data:
--- INSERT INTO tracker_data (user_id, top_total, bottom_total, top_done, bottom_done)
--- SELECT id, 27, 23, 1, 1 FROM users WHERE username = 'dad'
--- ON CONFLICT (user_id) DO NOTHING;

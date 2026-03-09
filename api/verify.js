@@ -1,12 +1,7 @@
-const jwt = require('jsonwebtoken');
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
+const { verifyToken, setCorsHeaders } = require('./lib/auth');
 
 module.exports = async (req, res) => {
-    // CORS headers
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    setCorsHeaders(res, 'POST, OPTIONS', 'Content-Type, Authorization');
 
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
@@ -17,16 +12,7 @@ module.exports = async (req, res) => {
     }
 
     try {
-        const authHeader = req.headers.authorization;
-        
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return res.status(401).json({ error: 'No token provided' });
-        }
-
-        const token = authHeader.substring(7); // Remove 'Bearer ' prefix
-
-        // Verify token
-        const decoded = jwt.verify(token, JWT_SECRET);
+        const decoded = verifyToken(req);
 
         return res.status(200).json({
             valid: true,
@@ -38,10 +24,12 @@ module.exports = async (req, res) => {
         });
 
     } catch (error) {
-        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+        if (error.message === 'No token provided' || error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
             return res.status(401).json({ error: 'Invalid or expired token' });
         }
-        
+        if (error.message && error.message.includes('JWT_SECRET')) {
+            return res.status(500).json({ error: 'Server configuration error' });
+        }
         console.error('Verify error:', error);
         return res.status(500).json({ error: 'Internal server error' });
     }

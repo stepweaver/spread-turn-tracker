@@ -1,44 +1,41 @@
-const { createClient } = require('@supabase/supabase-js');
-const jwt = require('jsonwebtoken');
+const { verifyToken, setCorsHeaders } = require('./lib/auth');
+const { getSupabaseClient } = require('./lib/supabase');
+const { getSharedUserId } = require('./lib/shared');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-production';
+const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_NOTE_LENGTH = 2000;
 
-// Helper to verify token and get user
-function verifyToken(req) {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        throw new Error('No token provided');
+function isValidDate(str) {
+    if (!str) return false;
+    if (!DATE_REGEX.test(str)) return false;
+    const d = new Date(str);
+    return !isNaN(d.getTime());
+}
+
+function validateNote(note) {
+    const n = (note || '').toString().trim();
+    if (!n) return { valid: false, error: 'note is required' };
+    if (n.length > MAX_NOTE_LENGTH) {
+        return { valid: false, error: `note must be ${MAX_NOTE_LENGTH} characters or less` };
     }
-    const token = authHeader.substring(7);
-    return jwt.verify(token, JWT_SECRET);
+    return { valid: true, value: n };
 }
 
 module.exports = async (req, res) => {
-    // CORS headers
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
+    setCorsHeaders(res, 'GET, POST, PUT, DELETE, OPTIONS');
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
     }
 
     try {
-        // Verify authentication
-        const decoded = verifyToken(req);
-        const userId = decoded.userId;
-
-        const supabase = createClient(
-            process.env.SUPABASE_URL,
-            process.env.SUPABASE_SERVICE_KEY
-        );
+        verifyToken(req);
+        const supabase = getSupabaseClient();
 
         if (req.method === 'GET') {
-            // Get all treatment notes for user, ordered by date descending
+            // All users see the same treatment notes (shared family data)
             const { data, error } = await supabase
                 .from('treatment_notes')
                 .select('*')
-                .eq('user_id', userId)
                 .order('date', { ascending: false })
                 .order('created_at', { ascending: false });
 
@@ -50,19 +47,30 @@ module.exports = async (req, res) => {
             return res.status(200).json(data || []);
 
         } else if (req.method === 'POST') {
-            // Create new treatment note
             const { date, note } = req.body;
 
-            if (!date || !note) {
-                return res.status(400).json({ error: 'date and note are required' });
+            if (!date) {
+                return res.status(400).json({ error: 'date is required' });
+            }
+            const noteResult = validateNote(note);
+            if (!noteResult.valid) {
+                return res.status(400).json({ error: noteResult.error });
+            }
+            if (!isValidDate(date)) {
+                return res.status(400).json({ error: 'date must be in YYYY-MM-DD format' });
+            }
+
+            const sharedUserId = await getSharedUserId(supabase);
+            if (!sharedUserId) {
+                return res.status(500).json({ error: 'No users configured' });
             }
 
             const { data, error } = await supabase
                 .from('treatment_notes')
                 .insert({
-                    user_id: userId,
+                    user_id: sharedUserId,
                     date: date,
-                    note: note
+                    note: noteResult.value
                 })
                 .select()
                 .single();
@@ -75,24 +83,29 @@ module.exports = async (req, res) => {
             return res.status(201).json(data);
 
         } else if (req.method === 'PUT') {
-            // Update treatment note
             const { id, date, note } = req.body;
 
             if (!id) {
                 return res.status(400).json({ error: 'id is required' });
             }
-            if (!date || !note) {
-                return res.status(400).json({ error: 'date and note are required' });
+            if (!date) {
+                return res.status(400).json({ error: 'date is required' });
+            }
+            const noteResult = validateNote(note);
+            if (!noteResult.valid) {
+                return res.status(400).json({ error: noteResult.error });
+            }
+            if (!isValidDate(date)) {
+                return res.status(400).json({ error: 'date must be in YYYY-MM-DD format' });
             }
 
             const { data, error } = await supabase
                 .from('treatment_notes')
                 .update({
                     date: date,
-                    note: note
+                    note: noteResult.value
                 })
                 .eq('id', id)
-                .eq('user_id', userId) // Ensure user can only update their own notes
                 .select()
                 .single();
 
@@ -108,7 +121,6 @@ module.exports = async (req, res) => {
             return res.status(200).json(data);
 
         } else if (req.method === 'DELETE') {
-            // Delete treatment note
             const noteId = req.query.id || req.body.id;
 
             if (!noteId) {
@@ -118,8 +130,7 @@ module.exports = async (req, res) => {
             const { error } = await supabase
                 .from('treatment_notes')
                 .delete()
-                .eq('id', noteId)
-                .eq('user_id', userId); // Ensure user can only delete their own notes
+                .eq('id', noteId);
 
             if (error) {
                 console.error('Error deleting treatment note:', error);
@@ -136,7 +147,9 @@ module.exports = async (req, res) => {
         if (error.message === 'No token provided' || error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
             return res.status(401).json({ error: 'Unauthorized' });
         }
-        
+        if (error.message && error.message.includes('JWT_SECRET')) {
+            return res.status(500).json({ error: 'Server configuration error' });
+        }
         console.error('Treatment notes API error:', error);
         return res.status(500).json({ error: 'Internal server error' });
     }

@@ -98,6 +98,13 @@ async function login(username, password) {
     return data;
 }
 
+function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
 // State Management
 const defaultState = {
     settings: {
@@ -579,7 +586,7 @@ function render() {
             const bottomTurn = dateTurns.find(t => t.arch === 'bottom');
             const note = topTurn?.note || bottomTurn?.note;
             
-            const noteHtml = note ? `<div class="history-note">"${note}"</div>` : '';
+            const noteHtml = note ? `<div class="history-note">"${escapeHtml(note)}"</div>` : '';
             const topHtml = topTurn 
                 ? `<div class="history-turn-item">
                     <span>Top</span>
@@ -615,7 +622,7 @@ function render() {
                 <div class="treatment-note-item">
                     <div class="treatment-note-content">
                         <div class="treatment-note-date">${formatDate(note.date)}</div>
-                        <div class="treatment-note-text">${note.note}</div>
+                        <div class="treatment-note-text">${escapeHtml(note.note)}</div>
                     </div>
                     <div class="treatment-note-actions">
                         <button class="btn-icon btn-edit-note" data-note-id="${note.id}" title="Edit note">✏️</button>
