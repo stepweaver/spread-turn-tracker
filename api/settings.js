@@ -101,8 +101,7 @@ module.exports = async (req, res) => {
                 return res.status(400).json({ error: 'childName must be 100 characters or less' });
             }
 
-            const dataToSave = {
-                user_id: userId,
+            const fields = {
                 top_total: top,
                 bottom_total: bottom,
                 install_date: installDate || null,
@@ -118,8 +117,8 @@ module.exports = async (req, res) => {
                 .maybeSingle();
 
             const result = existing
-                ? await supabase.from('settings').update(dataToSave).eq('user_id', sharedUserId).select()
-                : await supabase.from('settings').insert(dataToSave).select();
+                ? await supabase.from('settings').update(fields).eq('user_id', sharedUserId).select()
+                : await supabase.from('settings').insert({ ...fields, user_id: sharedUserId }).select();
 
             if (result.error) {
                 console.error('Error saving settings:', result.error);

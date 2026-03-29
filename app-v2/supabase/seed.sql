@@ -1,0 +1,7 @@
+-- Optional: run after migrations. First-time setup uses `bootstrap_household()` from the app
+-- after email signup, or invoke in SQL Editor as an authenticated user context is not available here.
+--
+-- To add a second caregiver (replace UUIDs and email):
+-- insert into public.household_members (household_id, user_id, role)
+-- select '<household-uuid>', id, 'caregiver'
+-- from auth.users where email = 'caregiver@example.com';
