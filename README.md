@@ -40,7 +40,7 @@ It is built for real-world daily use on a phone, with a clean interface and pers
   Multiple approved users can log in and work from the same tracker.
 
 - **Persistent storage**  
-  Data is stored in Supabase instead of relying on browser-only storage.
+  Data is stored in Google Sheets instead of relying on browser-only storage.
 
 - **Mobile-first design**  
   Built to work well on phones and easy to save to the home screen.
@@ -49,14 +49,14 @@ It is built for real-world daily use on a phone, with a clean interface and pers
 
 - **Frontend**: HTML, CSS, Vanilla JavaScript
 - **Backend/API**: Node.js with Vercel serverless functions
-- **Database**: Supabase (PostgreSQL)
+- **Database**: Google Sheets (via Google Sheets API)
 - **Auth**: JWT-based authentication with environment-configured users
 - **Password handling**: `bcryptjs` support for hashed passwords
 
 ## How It Works
 
 1. An approved user logs in using credentials defined in environment variables.
-2. The app calls the backend API to verify the JWT and load the shared tracker data from Supabase.
+2. The app calls the backend API to verify the JWT and load the shared tracker data from Google Sheets.
 3. The current schedule (every-`N`-days or twice-per-week) determines when a turn can be logged.
 4. When a turn is logged, turn counts, history, and next-due time are updated automatically.
 5. Treatment notes can be added for visits, adjustments, or reminders.
@@ -94,8 +94,9 @@ Copy `.env.example` to `.env.local` and fill in your values.
 Example:
 
 ```bash
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_SERVICE_KEY=your-service-role-key
+GOOGLE_SHEETS_SPREADSHEET_ID=your_google_sheet_id_here
+GOOGLE_SERVICE_ACCOUNT_EMAIL=your-service-account@your-project.iam.gserviceaccount.com
+GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYOUR_KEY_HERE\n-----END PRIVATE KEY-----\n"
 JWT_SECRET=your-random-secret-string
 APP_USERS=[{"username":"user","password":"your-password","displayName":"Display Name"}]
 ALLOWED_ORIGIN=http://127.0.0.1:3000
@@ -117,39 +118,30 @@ Then open `http://127.0.0.1:3000` in your browser.
 
 ## Environment Variables
 
-- **SUPABASE_URL** (required): Your Supabase project URL.
-- **SUPABASE_SERVICE_KEY** (required): Supabase service-role key used by the API.
+- **GOOGLE_SHEETS_SPREADSHEET_ID** (required): The target spreadsheet ID.
+- **GOOGLE_SERVICE_ACCOUNT_EMAIL** (required): Service account email for Sheets access.
+- **GOOGLE_PRIVATE_KEY** (required): Service account private key (keep quotes and `\n`).
 - **JWT_SECRET** (required): Secret used to sign JWT tokens.
 - **APP_USERS** (required): JSON array of approved users, each with `username`, `password` or `passwordHash`, and `displayName`.
 - **ALLOWED_ORIGIN** (optional): CORS restriction used by the API layer (e.g. `https://your-app.vercel.app` or `http://127.0.0.1:3000` for local dev).
 
-## Database
+## Storage layout
 
-The app uses Supabase with tables for:
+The spreadsheet must contain tabs named:
 
-- `users`
 - `settings`
 - `turns`
 - `treatment_notes`
 
-The schema is defined in:
-
-- `supabase/schema.sql`
-
-Additional setup scripts are provided in:
-
-- `supabase/setup-users.sql`
-- `supabase/migration.sql`
-
 ## Deployment
 
-This project is set up to deploy on Vercel with Supabase as the backend.
+This project is set up to deploy on Vercel using Google Sheets as the backend.
 
 Typical deployment flow:
 
-1. Create a Supabase project.
-2. Run the SQL schema from `supabase/schema.sql` in the Supabase SQL editor.
-3. Add environment variables in Vercel (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `JWT_SECRET`, `APP_USERS`, and optionally `ALLOWED_ORIGIN`).
+1. Create a Google Cloud service account and download its JSON key.
+2. Share your spreadsheet with the service account email as **Editor**.
+3. Add environment variables in Vercel (`GOOGLE_SHEETS_SPREADSHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `JWT_SECRET`, `APP_USERS`, and optionally `ALLOWED_ORIGIN`).
 4. Deploy the repo to Vercel (via Git integration or `vercel` CLI).
 5. Log in with one of the configured users and start tracking.
 
@@ -160,16 +152,12 @@ spread-turn-tracker/
 ├── api/
 │   ├── lib/
 │   │   ├── auth.js           # JWT verification, CORS helpers
-│   │   └── supabase.js       # Supabase client
+│   │   └── sheets.js         # Google Sheets client + helpers
 │   ├── login.js              # Authentication endpoint
 │   ├── verify.js             # Token verification
 │   ├── settings.js           # User settings CRUD
 │   ├── turns.js              # Turn logging CRUD
 │   └── treatment-notes.js    # Treatment notes CRUD
-├── supabase/
-│   ├── schema.sql            # Database schema
-│   ├── setup-users.sql       # User setup instructions
-│   └── migration.sql         # Migration scripts
 ├── index.html                # Main HTML
 ├── styles.css                # All styling
 ├── app.js                    # Frontend application logic

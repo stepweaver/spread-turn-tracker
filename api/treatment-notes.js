@@ -1,6 +1,5 @@
 const { verifyToken, setCorsHeaders } = require('./lib/auth');
-const { getSupabaseClient } = require('./lib/supabase');
-const { getSharedUserId } = require('./lib/shared');
+const { readObjects, overwriteObjects, generateId, nowIso } = require('./lib/sheets');
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_NOTE_LENGTH = 2000;
@@ -21,6 +20,14 @@ function validateNote(note) {
     return { valid: true, value: n };
 }
 
+function sortNotes(rows) {
+    return [...rows].sort((a, b) => {
+        const dateCompare = String(b.date || '').localeCompare(String(a.date || ''));
+        if (dateCompare !== 0) return dateCompare;
+        return String(b.created_at || '').localeCompare(String(a.created_at || ''));
+    });
+}
+
 module.exports = async (req, res) => {
     setCorsHeaders(res, 'GET, POST, PUT, DELETE, OPTIONS');
     if (req.method === 'OPTIONS') {
@@ -29,25 +36,15 @@ module.exports = async (req, res) => {
 
     try {
         verifyToken(req);
-        const supabase = getSupabaseClient();
 
         if (req.method === 'GET') {
-            // All users see the same treatment notes (shared family data)
-            const { data, error } = await supabase
-                .from('treatment_notes')
-                .select('*')
-                .order('date', { ascending: false })
-                .order('created_at', { ascending: false });
+            const rows = await readObjects('treatment_notes');
+            return res.status(200).json(sortNotes(rows));
 
-            if (error) {
-                console.error('Error fetching treatment notes:', error);
-                return res.status(500).json({ error: 'Failed to fetch treatment notes' });
-            }
+        }
 
-            return res.status(200).json(data || []);
-
-        } else if (req.method === 'POST') {
-            const { date, note } = req.body;
+        if (req.method === 'POST') {
+            const { date, note } = req.body || {};
 
             if (!date) {
                 return res.status(400).json({ error: 'date is required' });
@@ -60,30 +57,27 @@ module.exports = async (req, res) => {
                 return res.status(400).json({ error: 'date must be in YYYY-MM-DD format' });
             }
 
-            const sharedUserId = await getSharedUserId(supabase);
-            if (!sharedUserId) {
-                return res.status(500).json({ error: 'No users configured' });
-            }
+            const rows = await readObjects('treatment_notes');
+            const timestamp = nowIso();
 
-            const { data, error } = await supabase
-                .from('treatment_notes')
-                .insert({
-                    user_id: sharedUserId,
-                    date: date,
-                    note: noteResult.value
-                })
-                .select()
-                .single();
+            const newRow = {
+                id: generateId(),
+                user_id: 'shared',
+                date,
+                note: noteResult.value,
+                created_at: timestamp,
+                updated_at: timestamp
+            };
 
-            if (error) {
-                console.error('Error creating treatment note:', error);
-                return res.status(500).json({ error: 'Failed to create treatment note' });
-            }
+            const nextRows = [...rows, newRow];
+            await overwriteObjects('treatment_notes', nextRows);
 
-            return res.status(201).json(data);
+            return res.status(201).json(newRow);
 
-        } else if (req.method === 'PUT') {
-            const { id, date, note } = req.body;
+        }
+
+        if (req.method === 'PUT') {
+            const { id, date, note } = req.body || {};
 
             if (!id) {
                 return res.status(400).json({ error: 'id is required' });
@@ -99,58 +93,52 @@ module.exports = async (req, res) => {
                 return res.status(400).json({ error: 'date must be in YYYY-MM-DD format' });
             }
 
-            const { data, error } = await supabase
-                .from('treatment_notes')
-                .update({
-                    date: date,
-                    note: noteResult.value
-                })
-                .eq('id', id)
-                .select()
-                .single();
+            const rows = await readObjects('treatment_notes');
+            const index = rows.findIndex((row) => row.id === id);
 
-            if (error) {
-                console.error('Error updating treatment note:', error);
-                return res.status(500).json({ error: 'Failed to update treatment note' });
-            }
-
-            if (!data) {
+            if (index === -1) {
                 return res.status(404).json({ error: 'Treatment note not found' });
             }
 
-            return res.status(200).json(data);
+            const existing = rows[index];
+            rows[index] = {
+                ...existing,
+                date,
+                note: noteResult.value,
+                updated_at: nowIso()
+            };
 
-        } else if (req.method === 'DELETE') {
-            const noteId = req.query.id || req.body.id;
+            await overwriteObjects('treatment_notes', rows);
+
+            return res.status(200).json(rows[index]);
+
+        }
+
+        if (req.method === 'DELETE') {
+            const noteId = req.query.id || req.body?.id;
 
             if (!noteId) {
                 return res.status(400).json({ error: 'Note ID is required' });
             }
 
-            const { error } = await supabase
-                .from('treatment_notes')
-                .delete()
-                .eq('id', noteId);
+            const rows = await readObjects('treatment_notes');
+            const filtered = rows.filter((row) => row.id !== noteId);
 
-            if (error) {
-                console.error('Error deleting treatment note:', error);
-                return res.status(500).json({ error: 'Failed to delete treatment note' });
+            if (filtered.length === rows.length) {
+                return res.status(404).json({ error: 'Treatment note not found' });
             }
 
-            return res.status(200).json({ success: true });
+            await overwriteObjects('treatment_notes', filtered);
 
-        } else {
-            return res.status(405).json({ error: 'Method not allowed' });
+            return res.status(200).json({ success: true });
         }
 
+        return res.status(405).json({ error: 'Method not allowed' });
     } catch (error) {
         if (error.message === 'No token provided' || error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
             return res.status(401).json({ error: 'Unauthorized' });
         }
-        if (error.message && error.message.includes('JWT_SECRET')) {
-            return res.status(500).json({ error: 'Server configuration error' });
-        }
         console.error('Treatment notes API error:', error);
-        return res.status(500).json({ error: 'Internal server error' });
+        return res.status(500).json({ error: error.message || 'Internal server error' });
     }
 };

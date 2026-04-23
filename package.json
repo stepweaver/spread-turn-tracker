@@ -1,14 +1,14 @@
 {
   "name": "spread-turn-tracker",
   "version": "1.0.0",
-  "description": "Orthodontic expander turn tracker with Supabase backend",
+  "description": "Orthodontic expander turn tracker with Google Sheets backend",
   "scripts": {
     "dev": "node server.js",
     "deploy": "vercel --prod"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.39.0",
     "bcryptjs": "^2.4.3",
+    "googleapis": "^171.4.0",
     "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {
